@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useSocialStore } from '@/stores/socialStore';
+import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 
 const TRENDING = [
   { topic: '#buildinpublic', posts: '24.1K' },
@@ -41,6 +42,7 @@ export function RightSidebar() {
   const followingIds = useSocialStore((state) => state.followingIds);
   const toggleFollow = useSocialStore((state) => state.toggleFollow);
   const [searchQuery, setSearchQuery] = useState('');
+  const suggestedPeople = WHO_TO_FOLLOW.filter((person) => !followingIds.includes(person.id));
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +98,7 @@ export function RightSidebar() {
       {/* Who to follow */}
       <div className="rounded-2xl bg-slate-800/60 border border-white/6 overflow-hidden">
         <h3 className="px-4 pt-4 pb-2 text-[19px] font-extrabold text-white">Who to follow</h3>
-        {WHO_TO_FOLLOW.map((person) => {
+        {suggestedPeople.map((person) => {
           const isFollowing = followingIds.includes(person.id);
           return (
             <div key={person.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
@@ -117,9 +119,7 @@ export function RightSidebar() {
                 <div className="flex items-center gap-1">
                   <span className="text-sm font-bold text-white truncate hover:underline">{person.displayName}</span>
                   {person.isVerified && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" className="text-sky-400 shrink-0" fill="currentColor">
-                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <VerifiedBadge size={14} className="shrink-0" />
                   )}
                 </div>
                 <span className="text-xs text-slate-400 hover:underline">@{person.username}</span>
@@ -139,6 +139,11 @@ export function RightSidebar() {
             </div>
           );
         })}
+        {suggestedPeople.length === 0 && (
+          <p className="px-4 py-4 text-sm text-slate-400">
+            You are all caught up. Try Explore to discover more people.
+          </p>
+        )}
         <button 
           onClick={() => router.push('/explore?tab=people')}
           className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors"

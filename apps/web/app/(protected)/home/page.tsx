@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FeedList } from '@/features/feed/components/FeedList';
+import { StoriesRail } from '@/features/stories/components/StoriesRail';
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
@@ -12,6 +13,8 @@ export default function HomePage() {
       <div className="sticky top-0 z-20 backdrop-blur-md bg-slate-950/80 border-b border-white/8 px-4 py-3">
         <h1 className="text-[20px] font-extrabold text-white">Home</h1>
       </div>
+
+      <StoriesRail />
 
       {/* Feed tabs */}
       <div className="flex border-b border-white/8">

@@ -154,6 +154,25 @@ export interface Conversation {
 }
 
 // ============================================
+// STORY TYPES
+// ============================================
+export interface Story {
+  id: string;
+  authorId: string;
+  caption?: string;
+  background: string;
+  media?: MediaItem;
+  viewersCount: number;
+  seenBy: string[];
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface StoryWithAuthor extends Story {
+  author: UserProfile;
+}
+
+// ============================================
 // BOOKMARK TYPES
 // ============================================
 export interface Bookmark {

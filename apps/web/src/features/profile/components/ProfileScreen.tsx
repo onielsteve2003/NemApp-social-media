@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useAuthUser } from '@/stores/authStore';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSocialStore } from '@/stores/socialStore';
 import { MOCK_USERS } from '@/mocks/auth';
+import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import { TweetCard } from '@/features/feed/components/TweetCard';
 
 type ProfileTab = 'posts' | 'replies' | 'likes';
@@ -72,9 +73,17 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   );
 
   const likedTweets = useMemo(() => {
-    if (!isOwnProfile) return [];
-    return feed.filter((tweet) => likedIds.has(tweet.id));
-  }, [feed, likedIds, isOwnProfile]);
+    if (!targetUser) return [];
+    if (isOwnProfile) {
+      return feed.filter((tweet) => likedIds.has(tweet.id));
+    }
+
+    const seed = targetUser.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return feed
+      .filter((tweet) => tweet.authorId !== targetUser.id && !tweet.isReply)
+      .filter((_, index) => (index + seed) % 3 === 0)
+      .slice(0, 12);
+  }, [feed, likedIds, isOwnProfile, targetUser]);
 
   const visibleTweets =
     activeTab === 'posts'
@@ -271,9 +280,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
               <h2 className="text-2xl font-extrabold text-white inline-flex items-center gap-2">
                 {targetUser.displayName}
                 {targetUser.isVerified && (
-                  <svg width="18" height="18" viewBox="0 0 24 24" className="text-sky-400" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <VerifiedBadge size={18} />
                 )}
               </h2>
               <p className="text-slate-400 text-sm">@{targetUser.username}</p>
@@ -386,11 +393,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           <div className="p-8 text-center text-slate-400 text-sm">Loading profile feed...</div>
         )}
 
-        {!isLoading && activeTab === 'likes' && !isOwnProfile && (
-          <EmptyState title="Likes are private" body="In this demo, only your own likes tab is available." />
-        )}
-
-        {!isLoading && (isOwnProfile || activeTab !== 'likes') && visibleTweets.length === 0 && (
+        {!isLoading && visibleTweets.length === 0 && (
           <EmptyState
             title={
               activeTab === 'posts'
@@ -409,7 +412,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           />
         )}
 
-        {!isLoading && (isOwnProfile || activeTab !== 'likes') && visibleTweets.map((tweet) => (
+        {!isLoading && visibleTweets.map((tweet) => (
           <TweetCard key={tweet.id} tweet={tweet} />
         ))}
       </section>
@@ -587,6 +590,21 @@ function EditProfileModal({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setAvatar(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -607,11 +625,35 @@ function EditProfileModal({
         </div>
 
         <div className="p-4 space-y-3">
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-800/50 px-3 py-3">
+            <img
+              src={avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=profile'}
+              alt="Avatar preview"
+              className="h-14 w-14 rounded-full bg-slate-700"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">Profile photo</p>
+              <p className="text-xs text-slate-400">Select an image from your device.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 transition-colors"
+            >
+              Upload
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarFileChange}
+              className="hidden"
+            />
+          </div>
           <ProfileInput label="Display name" value={displayName} onChange={setDisplayName} />
           <ProfileInput label="Bio" value={bio} onChange={setBio} multiline />
           <ProfileInput label="Location" value={location} onChange={setLocation} />
           <ProfileInput label="Website" value={website} onChange={setWebsite} />
-          <ProfileInput label="Avatar URL" value={avatar} onChange={setAvatar} />
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-white/10">

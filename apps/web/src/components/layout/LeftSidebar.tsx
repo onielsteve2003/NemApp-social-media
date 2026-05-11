@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore, useAuthUser } from '@/stores/authStore';
@@ -40,6 +41,16 @@ const NAV_ITEMS = [
     icon: (active: boolean) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Stories',
+    href: '/stories',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="5" width="8" height="14" rx="4" />
+        <rect x="13" y="5" width="8" height="14" rx="4" />
       </svg>
     ),
   },
@@ -86,6 +97,19 @@ export function LeftSidebar({ onNewPost }: { onNewPost: () => void }) {
   const pathname = usePathname();
   const user = useAuthUser();
   const { logout } = useAuthStore();
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   return (
     <aside className="flex h-screen w-[72px] xl:w-64 flex-col items-center xl:items-start px-2 xl:px-4 py-3 border-r border-white/8 fixed left-0 top-0 z-30">
@@ -135,24 +159,61 @@ export function LeftSidebar({ onNewPost }: { onNewPost: () => void }) {
 
       {/* User mini card */}
       {user && (
-        <div className="mt-auto w-full">
-          <button
-            onClick={() => logout()}
-            className="flex items-center gap-3 rounded-full px-3 py-2 w-full hover:bg-white/8 transition-colors text-left"
-            title="Sign out"
-          >
+        <div ref={accountMenuRef} className="mt-auto w-full relative">
+          <div className="flex items-center gap-3 rounded-full px-3 py-2 w-full hover:bg-white/8 transition-colors text-left">
             <img
               src={user.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
               alt={user.displayName}
               className="w-10 h-10 rounded-full shrink-0 bg-slate-700"
             />
-            <div className="hidden xl:block min-w-0">
+            <div className="hidden xl:block min-w-0 flex-1">
               <p className="text-sm font-bold text-white truncate leading-tight">{user.displayName}</p>
               <p className="text-sm text-slate-400 truncate">@{user.username}</p>
             </div>
-            <svg className="hidden xl:block ml-auto shrink-0 text-slate-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-            </svg>
+            <button
+              onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+              className="hidden xl:flex ml-auto shrink-0 rounded-full p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+              aria-label="Account options"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+              </svg>
+            </button>
+          </div>
+
+          {isAccountMenuOpen && (
+            <div className="absolute bottom-16 right-0 w-48 rounded-xl border border-white/10 bg-slate-900 p-1 shadow-xl z-40">
+              <Link
+                href="/profile"
+                onClick={() => setIsAccountMenuOpen(false)}
+                className="block rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10"
+              >
+                View profile
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setIsAccountMenuOpen(false)}
+                className="block rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10"
+              >
+                Settings
+              </Link>
+              <button
+                onClick={() => {
+                  setIsAccountMenuOpen(false);
+                  void logout();
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+              >
+                Log out
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => void logout()}
+            className="xl:hidden mt-2 w-full rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-colors"
+          >
+            Log out
           </button>
         </div>
       )}
