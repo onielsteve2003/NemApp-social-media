@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
+import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 interface SocialState {
   followingIds: string[];
@@ -20,6 +22,15 @@ export const useSocialStore = create<SocialState>()(
               ? state.followingIds.filter((id) => id !== userId)
               : [...state.followingIds, userId],
           }));
+
+          if (!exists) {
+            const currentUser = useAuthStore.getState().user;
+            if (currentUser) {
+              useNotificationStore
+                .getState()
+                .addNotification(currentUser.id, userId, 'follow', currentUser.id);
+            }
+          }
         },
 
         isFollowing: (userId: string) => get().followingIds.includes(userId),

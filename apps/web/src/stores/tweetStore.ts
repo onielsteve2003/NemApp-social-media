@@ -3,6 +3,8 @@ import { devtools } from 'zustand/middleware';
 import type { TweetWithAuthor } from '@shared-types';
 import { getMockFeedPage, FEED_PAGE_SIZE, MOCK_TWEETS } from '@/mocks/tweets';
 import { MOCK_USERS } from '@/mocks/auth';
+import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 interface TweetState {
   feed: TweetWithAuthor[];
@@ -191,6 +193,21 @@ export const useTweetStore = create<TweetState>()(
               : t
           ),
         }));
+
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser) return;
+
+        const mentions = content.match(/@(\w+)/g) ?? [];
+        for (const mention of mentions) {
+          const username = mention.slice(1).toLowerCase();
+          const mentionedUser = MOCK_USERS.find(
+            (user) => user.username.toLowerCase() === username
+          );
+          if (!mentionedUser) continue;
+          useNotificationStore
+            .getState()
+            .addNotification(currentUser.id, mentionedUser.id, 'mention', tweetId);
+        }
       },
 
       toggleLike: (tweetId) => {
