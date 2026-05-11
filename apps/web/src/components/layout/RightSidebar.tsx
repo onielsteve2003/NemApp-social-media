@@ -85,13 +85,17 @@ export function RightSidebar() {
         {TRENDING.map(({ topic, posts }) => (
           <button
             key={topic}
+            onClick={() => router.push(`/explore?q=${encodeURIComponent(topic)}`)}
             className="flex flex-col w-full text-left px-4 py-3 hover:bg-white/5 transition-colors"
           >
             <span className="text-[15px] font-bold text-white">{topic}</span>
             <span className="text-xs text-slate-400 mt-0.5">{posts} posts</span>
           </button>
         ))}
-        <button className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors">
+        <button 
+          onClick={() => router.push('/explore')}
+          className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors"
+        >
           Show more
         </button>
       </div>
@@ -103,22 +107,30 @@ export function RightSidebar() {
           const isFollowing = following.has(person.id);
           return (
             <div key={person.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
-              <img
-                src={person.avatar}
-                alt={person.displayName}
-                className="w-10 h-10 rounded-full bg-slate-700 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
+              <button
+                onClick={() => router.push(`/profile/${person.username}`)}
+                className="shrink-0"
+              >
+                <img
+                  src={person.avatar}
+                  alt={person.displayName}
+                  className="w-10 h-10 rounded-full bg-slate-700 hover:opacity-80 transition-opacity"
+                />
+              </button>
+              <button
+                onClick={() => router.push(`/profile/${person.username}`)}
+                className="min-w-0 flex-1 text-left"
+              >
                 <div className="flex items-center gap-1">
-                  <span className="text-sm font-bold text-white truncate">{person.displayName}</span>
+                  <span className="text-sm font-bold text-white truncate hover:underline">{person.displayName}</span>
                   {person.isVerified && (
                     <svg width="14" height="14" viewBox="0 0 24 24" className="text-sky-400 shrink-0" fill="currentColor">
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   )}
                 </div>
-                <span className="text-xs text-slate-400">@{person.username}</span>
-              </div>
+                <span className="text-xs text-slate-400 hover:underline">@{person.username}</span>
+              </button>
               <button
                 onClick={() => toggleFollow(person.id)}
                 className={`
@@ -134,7 +146,10 @@ export function RightSidebar() {
             </div>
           );
         })}
-        <button className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors">
+        <button 
+          onClick={() => router.push('/explore?tab=people')}
+          className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors"
+        >
           Show more
         </button>
       </div>

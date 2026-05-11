@@ -30,6 +30,9 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [openModal, setOpenModal] = useState<SocialModal>(null);
+  const [notificationSettings, setNotificationSettings] = useState<{
+    [userId: string]: { allPosts: boolean; likes: boolean; replies: boolean };
+  }>({});
 
   useEffect(() => {
     if (!authUser) {
@@ -170,18 +173,27 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 Edit profile
               </button>
             ) : (
-              <button
-                onClick={() => toggleFollow(targetUser.id)}
-                className={`
-                  mt-16 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors
-                  ${currentlyFollowing
-                    ? 'border border-white/25 text-white hover:border-red-500 hover:text-red-400'
-                    : 'bg-white text-slate-950 hover:bg-slate-200'
-                  }
-                `}
-              >
-                {currentlyFollowing ? 'Following' : 'Follow'}
-              </button>
+              <div className="mt-16 flex gap-2">
+                <button 
+                  onClick={() => router.push(`/messages?user=${targetUser.username}`)}
+                  className="rounded-full border border-white/25 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+                  title="Send message"
+                >
+                  Message
+                </button>
+                <button
+                  onClick={() => toggleFollow(targetUser.id)}
+                  className={`
+                    rounded-full px-4 py-1.5 text-sm font-semibold transition-colors
+                    ${currentlyFollowing
+                      ? 'border border-white/25 text-white hover:border-red-500 hover:text-red-400'
+                      : 'bg-white text-slate-950 hover:bg-slate-200'
+                    }
+                  `}
+                >
+                  {currentlyFollowing ? 'Following' : 'Follow'}
+                </button>
+              </div>
             )}
           </div>
 
@@ -233,6 +245,63 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 <span className="font-bold text-white mr-1">{followersCount}</span>Followers
               </button>
             </div>
+
+            {!isOwnProfile && currentlyFollowing && (
+              <div className="pt-4 border-t border-white/8 space-y-3">
+                <p className="text-sm font-semibold text-white">Notifications</p>
+                <label className="flex items-center gap-3 cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings[targetUser.id]?.allPosts ?? true}
+                    onChange={(e) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        [targetUser.id]: {
+                          ...prev[targetUser.id],
+                          allPosts: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="w-4 h-4 rounded accent-sky-400"
+                  />
+                  <span className="text-sm text-slate-300">Turn on notifications for all posts</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings[targetUser.id]?.likes ?? false}
+                    onChange={(e) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        [targetUser.id]: {
+                          ...prev[targetUser.id],
+                          likes: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="w-4 h-4 rounded accent-sky-400"
+                  />
+                  <span className="text-sm text-slate-300">Get notified when they like posts</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer hover:bg-white/5 -mx-2 px-2 py-1.5 rounded transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings[targetUser.id]?.replies ?? false}
+                    onChange={(e) =>
+                      setNotificationSettings((prev) => ({
+                        ...prev,
+                        [targetUser.id]: {
+                          ...prev[targetUser.id],
+                          replies: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="w-4 h-4 rounded accent-sky-400"
+                  />
+                  <span className="text-sm text-slate-300">Get notified when they reply</span>
+                </label>
+              </div>
+            )}
           </div>
         </div>
       </section>
