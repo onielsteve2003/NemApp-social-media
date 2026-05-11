@@ -3,6 +3,7 @@ import { devtools, persist } from 'zustand/middleware';
 import type { Message, User } from '@shared-types';
 import { MOCK_USERS } from '@/mocks/auth';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 interface ConversationPreview {
   id: string;
@@ -19,6 +20,7 @@ interface MessageState {
   initializedForUserIds: string[];
 
   seedMessages: (userId: string) => void;
+  openConversationWithUser: (participantId: string) => string | null;
   setActiveConversation: (conversationId: string) => void;
   sendMessage: (conversationId: string, content: string) => void;
   markConversationRead: (conversationId: string) => void;
@@ -99,6 +101,52 @@ export const useMessageStore = create<MessageState>()(
           }));
         },
 
+        openConversationWithUser: (participantId) => {
+          const user = useAuthStore.getState().user;
+          if (!user || participantId === user.id) return null;
+
+          const existing = get().conversations.find(
+            (conversation) => conversation.participantId === participantId
+          );
+
+          if (existing) {
+            set({ activeConversationId: existing.id });
+            get().markConversationRead(existing.id);
+            return existing.id;
+          }
+
+          const now = new Date();
+          const conversationId = `conv-${user.id}-${participantId}`;
+          const starterMessage: Message = {
+            id: `msg-${messageIdCounter++}`,
+            conversationId,
+            senderId: participantId,
+            content: 'Hey! Thanks for connecting on NemApp.',
+            isRead: false,
+            createdAt: now,
+          };
+
+          set((state) => ({
+            conversations: [
+              {
+                id: conversationId,
+                participantId,
+                lastMessage: starterMessage.content,
+                lastMessageAt: starterMessage.createdAt,
+                unreadCount: 1,
+              },
+              ...state.conversations,
+            ],
+            messagesByConversation: {
+              ...state.messagesByConversation,
+              [conversationId]: [starterMessage],
+            },
+            activeConversationId: conversationId,
+          }));
+
+          return conversationId;
+        },
+
         setActiveConversation: (conversationId) => {
           set({ activeConversationId: conversationId });
           get().markConversationRead(conversationId);
@@ -141,6 +189,16 @@ export const useMessageStore = create<MessageState>()(
                 ),
             };
           });
+
+          const participantId = get().conversations.find(
+            (conversation) => conversation.id === conversationId
+          )?.participantId;
+
+          if (participantId) {
+            useNotificationStore
+              .getState()
+              .addNotification(participantId, user.id, 'message', conversationId);
+          }
         },
 
         markConversationRead: (conversationId) => {

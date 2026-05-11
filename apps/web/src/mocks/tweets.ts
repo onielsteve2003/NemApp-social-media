@@ -1,7 +1,7 @@
 import type { TweetWithAuthor } from '@shared-types';
 import { MOCK_USERS } from './auth';
 
-const [demo, alice, bob] = MOCK_USERS;
+const [demo, alice, bob, , vercel, leeerob, shadcn] = MOCK_USERS;
 
 const toProfile = (user: (typeof MOCK_USERS)[number]) => ({
   id: user.id,
@@ -71,21 +71,72 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
   },
   {
     id: 'tweet-4',
+    authorId: leeerob.id,
+    content:
+      '@alice Massive congrats on the launch. The UI polish is clean and super fast. #buildinpublic',
+    likesCount: 91,
+    repliesCount: 12,
+    retweetsCount: 18,
+    bookmarksCount: 14,
+    isReply: true,
+    replyTo: 'tweet-1',
+    mentions: ['alice'],
+    hashtags: ['buildinpublic'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 39),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 39),
+    author: toProfile(leeerob),
+  },
+  {
+    id: 'tweet-5',
+    authorId: demo.id,
+    content:
+      '@leeerob Appreciate it! We are tightening the interaction details next. #webdev',
+    likesCount: 64,
+    repliesCount: 6,
+    retweetsCount: 9,
+    bookmarksCount: 8,
+    isReply: true,
+    replyTo: 'tweet-4',
+    mentions: ['leeerob'],
+    hashtags: ['webdev'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 34),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 34),
+    author: toProfile(demo),
+  },
+  {
+    id: 'tweet-6',
+    authorId: bob.id,
+    content:
+      '@demo Totally agree. That spacing rhythm advice is gold. #design #ux',
+    likesCount: 73,
+    repliesCount: 4,
+    retweetsCount: 11,
+    bookmarksCount: 16,
+    isReply: true,
+    replyTo: 'tweet-2',
+    mentions: ['demo'],
+    hashtags: ['design', 'ux'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 28),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 28),
+    author: toProfile(bob),
+  },
+  {
+    id: 'tweet-7',
     authorId: alice.id,
     content:
-      "I've been using TypeScript for 4 years and I still learn something new every week. The ecosystem just keeps growing 🔥\n\nWhat's your favourite TS feature right now?",
+      "I've been using TypeScript for 4 years and I still learn something new every week. The ecosystem just keeps growing 🔥\n\nWhat's your favourite TS feature right now? #typescript #nextjs",
     likesCount: 394,
     repliesCount: 107,
     retweetsCount: 89,
     bookmarksCount: 136,
     mentions: [],
-    hashtags: [],
+    hashtags: ['typescript', 'nextjs'],
     createdAt: new Date(Date.now() - 1000 * 60 * 90),
     updatedAt: new Date(Date.now() - 1000 * 60 * 90),
     author: toProfile(alice),
   },
   {
-    id: 'tweet-5',
+    id: 'tweet-8',
     authorId: demo.id,
     content:
       "PSA: Your side project doesn't need to be perfect before you share it. Ship it, learn from feedback, iterate. The only bad side project is the one that stays in a private repo forever.",
@@ -100,7 +151,7 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(demo),
   },
   {
-    id: 'tweet-6',
+    id: 'tweet-9',
     authorId: bob.id,
     content:
       "Redesigned our onboarding flow today. Reduced it from 7 steps to 3. Conversion jumped 40% in the first hour of A/B testing 📈 #startups #growth",
@@ -115,7 +166,7 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(bob),
   },
   {
-    id: 'tweet-7',
+    id: 'tweet-10',
     authorId: alice.id,
     content:
       "Reminder that REST APIs are not \"old\" or \"bad\". They're proven, simple, and work beautifully at scale. GraphQL and tRPC are great tools, but not every problem needs them.",
@@ -130,22 +181,22 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(alice),
   },
   {
-    id: 'tweet-8',
+    id: 'tweet-11',
     authorId: demo.id,
     content:
-      "Built a full-stack app this weekend using Next.js 14, Zustand, and Socket.IO. Real-time feeds are genuinely magical ✨ Open sourcing it once I clean up the code.",
+      "Built a full-stack app this weekend using Next.js 14, Zustand, and Socket.IO. Real-time feeds are genuinely magical ✨ Open sourcing it once I clean up the code. #nextjs #opensource",
     likesCount: 457,
     repliesCount: 41,
     retweetsCount: 112,
     bookmarksCount: 188,
     mentions: [],
-    hashtags: [],
+    hashtags: ['nextjs', 'opensource'],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
     author: toProfile(demo),
   },
   {
-    id: 'tweet-9',
+    id: 'tweet-12',
     authorId: bob.id,
     content:
       "Dark mode isn't just a preference, it's a statement. Light mode users are out here flexing their healthy eyes 😂 #darkmode",
@@ -160,7 +211,7 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(bob),
   },
   {
-    id: 'tweet-10',
+    id: 'tweet-13',
     authorId: alice.id,
     content:
       "Things I wish someone told me before I started freelancing:\n\n• Charge more than you think\n• Scope creep is real, have a contract\n• Relationships > portfolios\n• Rest is productive too\n\nAnything to add?",
@@ -175,7 +226,7 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(alice),
   },
   {
-    id: 'tweet-11',
+    id: 'tweet-14',
     authorId: demo.id,
     content:
       "The gap between junior and senior dev isn't the number of languages you know — it's how you think about trade-offs. Every decision has a cost. Learn to see them.",
@@ -190,19 +241,34 @@ export const MOCK_TWEETS: TweetWithAuthor[] = [
     author: toProfile(demo),
   },
   {
-    id: 'tweet-12',
-    authorId: bob.id,
+    id: 'tweet-15',
+    authorId: shadcn.id,
     content:
-      "Your brand is not your logo. Your brand is how people feel when they interact with you. Build for the feeling. #branding #design",
+      "Your brand is not your logo. Your brand is how people feel when they interact with you. Build for the feeling. #branding #design #react",
     likesCount: 1524,
     repliesCount: 96,
     retweetsCount: 467,
     bookmarksCount: 832,
     mentions: [],
-    hashtags: ['branding', 'design'],
+    hashtags: ['branding', 'design', 'react'],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 30),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 30),
-    author: toProfile(bob),
+    author: toProfile(shadcn),
+  },
+  {
+    id: 'tweet-16',
+    authorId: vercel.id,
+    content:
+      'Infrastructure should disappear into the background so product teams can ship faster. #opensource #webdev',
+    likesCount: 745,
+    repliesCount: 38,
+    retweetsCount: 172,
+    bookmarksCount: 209,
+    mentions: [],
+    hashtags: ['opensource', 'webdev'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 36),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 36),
+    author: toProfile(vercel),
   },
 ];
 

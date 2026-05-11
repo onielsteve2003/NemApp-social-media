@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuthUser } from '@/stores/authStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSocialStore } from '@/stores/socialStore';
+import { MOCK_USERS } from '@/mocks/auth';
 
 function formatTime(date: Date): string {
   return new Date(date).toLocaleTimeString([], {
@@ -14,6 +16,8 @@ function formatTime(date: Date): string {
 }
 
 export default function MessagesPage() {
+  const searchParams = useSearchParams();
+  const targetUsername = searchParams.get('user');
   const user = useAuthUser();
   const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
   const allowMessagesFromEveryone = useSettingsStore(
@@ -25,6 +29,7 @@ export default function MessagesPage() {
     messagesByConversation,
     activeConversationId,
     seedMessages,
+    openConversationWithUser,
     setActiveConversation,
     sendMessage,
     getParticipant,
@@ -37,6 +42,17 @@ export default function MessagesPage() {
       seedMessages(user.id);
     }
   }, [user, seedMessages]);
+
+  useEffect(() => {
+    if (!user || !targetUsername) return;
+
+    const target = MOCK_USERS.find(
+      (person) => person.username.toLowerCase() === targetUsername.toLowerCase()
+    );
+    if (!target) return;
+
+    openConversationWithUser(target.id);
+  }, [user, targetUsername, openConversationWithUser]);
 
   const visibleConversations = useMemo(
     () =>

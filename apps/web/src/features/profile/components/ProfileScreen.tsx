@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthUser } from '@/stores/authStore';
+import { useAuthStore, useAuthUser } from '@/stores/authStore';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSocialStore } from '@/stores/socialStore';
 import { MOCK_USERS } from '@/mocks/auth';
@@ -25,11 +25,18 @@ interface ProfileScreenProps {
 export function ProfileScreen({ username }: ProfileScreenProps) {
   const router = useRouter();
   const authUser = useAuthUser();
+  const setAuthUser = useAuthStore((state) => state.setUser);
   const { feed, isLoading, fetchFeed, likedIds } = useTweetStore();
   const { followingIds, toggleFollow, isFollowing } = useSocialStore();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [openModal, setOpenModal] = useState<SocialModal>(null);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
   const [notificationSettings, setNotificationSettings] = useState<{
     [userId: string]: { allPosts: boolean; likes: boolean; replies: boolean };
   }>({});
@@ -54,8 +61,13 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
   const isOwnProfile = targetUser?.id === authUser?.id;
 
-  const userTweets = useMemo(
-    () => feed.filter((tweet) => tweet.authorId === targetUser?.id),
+  const userPosts = useMemo(
+    () => feed.filter((tweet) => tweet.authorId === targetUser?.id && !tweet.isReply),
+    [feed, targetUser?.id]
+  );
+
+  const userReplies = useMemo(
+    () => feed.filter((tweet) => tweet.authorId === targetUser?.id && Boolean(tweet.isReply)),
     [feed, targetUser?.id]
   );
 
@@ -65,7 +77,13 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   }, [feed, likedIds, isOwnProfile]);
 
   const visibleTweets =
-    activeTab === 'posts' ? userTweets : activeTab === 'likes' ? likedTweets : [];
+    activeTab === 'posts'
+      ? userPosts
+      : activeTab === 'replies'
+        ? userReplies
+        : activeTab === 'likes'
+          ? likedTweets
+          : [];
 
   const peopleWithoutTarget = useMemo(() => {
     if (!targetUser) return [];
@@ -92,6 +110,54 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
     return peopleWithoutTarget.slice(0, 5);
   }, [targetUser, isOwnProfile, followingIds, peopleWithoutTarget]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    setEditDisplayName(authUser.displayName ?? '');
+    setEditBio(authUser.bio ?? '');
+    setEditLocation(authUser.location ?? '');
+    setEditWebsite(authUser.website ?? '');
+    setEditAvatar(authUser.avatar ?? '');
+  }, [authUser]);
+
+  const handleSaveProfile = () => {
+    if (!authUser) return;
+    const trimmedName = editDisplayName.trim();
+    if (!trimmedName) return;
+
+    const updatedUser = {
+      ...authUser,
+      displayName: trimmedName,
+      bio: editBio.trim(),
+      location: editLocation.trim(),
+      website: editWebsite.trim(),
+      avatar: editAvatar.trim() || authUser.avatar,
+      updatedAt: new Date(),
+    };
+
+    setAuthUser(updatedUser);
+
+    useTweetStore.setState((state) => ({
+      feed: state.feed.map((tweet) =>
+        tweet.authorId === updatedUser.id
+          ? {
+              ...tweet,
+              author: {
+                ...tweet.author,
+                displayName: updatedUser.displayName,
+                bio: updatedUser.bio,
+                avatar: updatedUser.avatar,
+                location: updatedUser.location,
+                website: updatedUser.website,
+                updatedAt: updatedUser.updatedAt,
+              },
+            }
+          : tweet
+      ),
+    }));
+
+    setIsEditProfileOpen(false);
+  };
 
   if (!authUser) return null;
 
@@ -144,7 +210,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </button>
           <div>
             <h1 className="text-xl font-extrabold text-white leading-tight">{targetUser.displayName}</h1>
-            <p className="text-xs text-slate-400">{userTweets.length} posts</p>
+            <p className="text-xs text-slate-400">{userPosts.length} posts</p>
           </div>
         </div>
       </header>
@@ -169,7 +235,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             />
 
             {isOwnProfile ? (
-              <button className="mt-16 rounded-full border border-white/25 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors">
+              <button
+                onClick={() => setIsEditProfileOpen(true)}
+                className="mt-16 rounded-full border border-white/25 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+              >
                 Edit profile
               </button>
             ) : (
@@ -317,26 +386,30 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           <div className="p-8 text-center text-slate-400 text-sm">Loading profile feed...</div>
         )}
 
-        {!isLoading && activeTab === 'replies' && (
-          <EmptyState title="No replies yet" body="Replies will be enabled with thread support in Stage 4." />
-        )}
-
         {!isLoading && activeTab === 'likes' && !isOwnProfile && (
           <EmptyState title="Likes are private" body="In this demo, only your own likes tab is available." />
         )}
 
-        {!isLoading && activeTab !== 'replies' && (isOwnProfile || activeTab !== 'likes') && visibleTweets.length === 0 && (
+        {!isLoading && (isOwnProfile || activeTab !== 'likes') && visibleTweets.length === 0 && (
           <EmptyState
-            title={activeTab === 'posts' ? 'No posts yet' : 'No liked posts yet'}
+            title={
+              activeTab === 'posts'
+                ? 'No posts yet'
+                : activeTab === 'replies'
+                  ? 'No replies yet'
+                  : 'No liked posts yet'
+            }
             body={
               activeTab === 'posts'
                 ? 'Posts from this account will appear here.'
-                : 'Posts you like will appear here for quick access.'
+                : activeTab === 'replies'
+                  ? 'Replies from this account will appear here.'
+                  : 'Posts you like will appear here for quick access.'
             }
           />
         )}
 
-        {!isLoading && activeTab !== 'replies' && (isOwnProfile || activeTab !== 'likes') && visibleTweets.map((tweet) => (
+        {!isLoading && (isOwnProfile || activeTab !== 'likes') && visibleTweets.map((tweet) => (
           <TweetCard key={tweet.id} tweet={tweet} />
         ))}
       </section>
@@ -349,6 +422,23 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           onToggleFollow={toggleFollow}
           isFollowing={isFollowing}
           onClose={() => setOpenModal(null)}
+        />
+      )}
+
+      {isEditProfileOpen && (
+        <EditProfileModal
+          displayName={editDisplayName}
+          setDisplayName={setEditDisplayName}
+          bio={editBio}
+          setBio={setEditBio}
+          location={editLocation}
+          setLocation={setEditLocation}
+          website={editWebsite}
+          setWebsite={setEditWebsite}
+          avatar={editAvatar}
+          setAvatar={setEditAvatar}
+          onClose={() => setIsEditProfileOpen(false)}
+          onSave={handleSaveProfile}
         />
       )}
     </div>
@@ -467,5 +557,111 @@ function SocialListModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function EditProfileModal({
+  displayName,
+  setDisplayName,
+  bio,
+  setBio,
+  location,
+  setLocation,
+  website,
+  setWebsite,
+  avatar,
+  setAvatar,
+  onClose,
+  onSave,
+}: {
+  displayName: string;
+  setDisplayName: (value: string) => void;
+  bio: string;
+  setBio: (value: string) => void;
+  location: string;
+  setLocation: (value: string) => void;
+  website: string;
+  setWebsite: (value: string) => void;
+  avatar: string;
+  setAvatar: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h3 className="text-lg font-bold text-white">Edit profile</h3>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1.5 text-slate-300 hover:bg-white/10 transition-colors"
+            aria-label="Close"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <ProfileInput label="Display name" value={displayName} onChange={setDisplayName} />
+          <ProfileInput label="Bio" value={bio} onChange={setBio} multiline />
+          <ProfileInput label="Location" value={location} onChange={setLocation} />
+          <ProfileInput label="Website" value={website} onChange={setWebsite} />
+          <ProfileInput label="Avatar URL" value={avatar} onChange={setAvatar} />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-white/10">
+          <button
+            onClick={onClose}
+            className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={displayName.trim().length === 0}
+            className="rounded-full bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-sky-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileInput({
+  label,
+  value,
+  onChange,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  multiline?: boolean;
+}) {
+  return (
+    <label className="block">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1.5">{label}</p>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          rows={3}
+          className="w-full rounded-xl border border-white/12 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-xl border border-white/12 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+        />
+      )}
+    </label>
   );
 }

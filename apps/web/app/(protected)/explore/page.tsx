@@ -2,25 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTweetStore } from '@/stores/tweetStore';
 import { MOCK_USERS } from '@/mocks/auth';
 import { TweetCard } from '@/features/feed/components/TweetCard';
 
 type ExploreTab = 'top' | 'posts' | 'people';
-
-const TREND_CANDIDATES = [
-  '#buildinpublic',
-  '#webdev',
-  '#typescript',
-  '#nextjs',
-  '#opensource',
-  '#ux',
-  '#design',
-  '#startup',
-  '#react',
-  '#nodejs',
-];
 
 function normalize(text: string): string {
   return text.toLowerCase().trim();
@@ -32,24 +19,19 @@ function formatCount(value: number): string {
   return `${value}`;
 }
 
-function getStableTrendCount(hashtag: string): number {
-  let hash = 0;
-  for (let i = 0; i < hashtag.length; i += 1) {
-    hash = (hash * 31 + hashtag.charCodeAt(i)) % 100000;
-  }
-  return 1200 + (hash % 5000);
-}
-
 export default function ExplorePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get('q') ?? '';
+  const urlTab = (searchParams.get('tab') ?? 'top') as ExploreTab;
   const feed = useTweetStore((state) => state.feed);
   const [query, setQuery] = useState(urlQuery);
-  const [activeTab, setActiveTab] = useState<ExploreTab>('top');
+  const [activeTab, setActiveTab] = useState<ExploreTab>(urlTab);
 
   useEffect(() => {
     setQuery(urlQuery);
-  }, [urlQuery]);
+    setActiveTab(urlTab as ExploreTab);
+  }, [urlQuery, urlTab]);
 
   const queryNorm = normalize(query);
 
@@ -89,13 +71,6 @@ export default function ExplorePage() {
       for (const raw of matches) {
         const hashtag = raw.toLowerCase();
         hashtagCounts.set(hashtag, (hashtagCounts.get(hashtag) ?? 0) + 1);
-      }
-    }
-
-    for (const trend of TREND_CANDIDATES) {
-      const hashtag = trend.toLowerCase();
-      if (!hashtagCounts.has(hashtag)) {
-        hashtagCounts.set(hashtag, getStableTrendCount(hashtag));
       }
     }
 
@@ -164,10 +139,18 @@ export default function ExplorePage() {
           <p className="px-4 pb-4 text-sm text-slate-400">No trends matched your query.</p>
         ) : (
           trends.map((trend) => (
-            <article key={trend.hashtag} className="px-4 py-3 border-t border-white/8">
+            <button
+              key={trend.hashtag}
+              onClick={() => {
+                setQuery(trend.hashtag);
+                setActiveTab('posts');
+                router.push(`/explore?q=${encodeURIComponent(trend.hashtag)}&tab=posts`);
+              }}
+              className="w-full px-4 py-3 border-t border-white/8 hover:bg-white/5 transition-colors text-left"
+            >
               <p className="text-[15px] font-bold text-white">{trend.hashtag}</p>
               <p className="text-xs text-slate-400 mt-0.5">{formatCount(trend.count)} posts</p>
-            </article>
+            </button>
           ))
         )}
       </section>
@@ -180,7 +163,7 @@ export default function ExplorePage() {
           {filteredPeople.length === 0 ? (
             <p className="px-4 pb-4 text-sm text-slate-400">No people found.</p>
           ) : (
-            filteredPeople.slice(0, 8).map((person) => (
+            filteredPeople.slice(0, activeTab === 'people' ? undefined : 8).map((person) => (
               <article key={person.id} className="px-4 py-3 border-t border-white/8 flex items-center gap-3">
                 <img
                   src={person.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${person.username}`}

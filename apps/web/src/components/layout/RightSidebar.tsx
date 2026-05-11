@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useSocialStore } from '@/stores/socialStore';
 
 const TRENDING = [
   { topic: '#buildinpublic', posts: '24.1K' },
@@ -13,21 +14,21 @@ const TRENDING = [
 
 const WHO_TO_FOLLOW = [
   {
-    id: 'sugg-1',
+    id: 'user-5',
     displayName: 'Vercel',
     username: 'vercel',
     avatar: 'https://api.dicebear.com/7.x/identicon/svg?seed=vercel',
     isVerified: true,
   },
   {
-    id: 'sugg-2',
+    id: 'user-6',
     displayName: 'Lee Robinson',
     username: 'leeerob',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=leeerob',
     isVerified: false,
   },
   {
-    id: 'sugg-3',
+    id: 'user-7',
     displayName: 'shadcn',
     username: 'shadcn',
     avatar: 'https://api.dicebear.com/7.x/identicon/svg?seed=shadcn',
@@ -37,7 +38,8 @@ const WHO_TO_FOLLOW = [
 
 export function RightSidebar() {
   const router = useRouter();
-  const [following, setFollowing] = useState<Set<string>>(new Set());
+  const followingIds = useSocialStore((state) => state.followingIds);
+  const toggleFollow = useSocialStore((state) => state.toggleFollow);
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -48,15 +50,6 @@ export function RightSidebar() {
       return;
     }
     router.push(`/explore?q=${encodeURIComponent(q)}`);
-  };
-
-  const toggleFollow = (id: string) => {
-    setFollowing((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   };
 
   return (
@@ -93,7 +86,7 @@ export function RightSidebar() {
           </button>
         ))}
         <button 
-          onClick={() => router.push('/explore')}
+          onClick={() => router.push('/explore?tab=top')}
           className="px-4 py-3 text-sm text-sky-400 hover:bg-white/5 w-full text-left transition-colors"
         >
           Show more
@@ -104,7 +97,7 @@ export function RightSidebar() {
       <div className="rounded-2xl bg-slate-800/60 border border-white/6 overflow-hidden">
         <h3 className="px-4 pt-4 pb-2 text-[19px] font-extrabold text-white">Who to follow</h3>
         {WHO_TO_FOLLOW.map((person) => {
-          const isFollowing = following.has(person.id);
+          const isFollowing = followingIds.includes(person.id);
           return (
             <div key={person.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
               <button
