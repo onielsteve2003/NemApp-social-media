@@ -22,6 +22,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const user = useAuthUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imageTimeoutRef = useRef<number | null>(null);
+  const imageStartedAtRef = useRef<number | null>(null);
+  const imageElapsedMsRef = useRef(0);
   const { stories, seedStories, createStory, markSeen, removeExpiredStories } = useStoryStore();
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -30,7 +33,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
   const [progress, setProgress] = useState(0);
   const [activeDurationMs, setActiveDurationMs] = useState(5000);
+  const [progressTransitionMs, setProgressTransitionMs] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     seedStories();
@@ -68,6 +73,37 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const activeGroupIndex = storyGroups.findIndex((group) => group.some((story) => story.id === activeStoryId));
   const activeGroup = activeGroupIndex >= 0 ? storyGroups[activeGroupIndex] : null;
   const activeStoryIndex = activeGroup?.findIndex((story) => story.id === activeStoryId) ?? -1;
+
+  const clearImageTimer = () => {
+    if (imageTimeoutRef.current !== null) {
+      window.clearTimeout(imageTimeoutRef.current);
+      imageTimeoutRef.current = null;
+    }
+  };
+
+  const startImageProgress = (fromProgress = 0) => {
+    clearImageTimer();
+    setProgressTransitionMs(0);
+    setProgress(fromProgress);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const remainingMs = activeDurationMs * (1 - fromProgress / 100);
+        if (remainingMs <= 0) {
+          goToNextStory();
+          return;
+        }
+
+        imageStartedAtRef.current = performance.now();
+        imageElapsedMsRef.current = (fromProgress / 100) * activeDurationMs;
+        setProgressTransitionMs(remainingMs);
+        setProgress(100);
+        imageTimeoutRef.current = window.setTimeout(() => {
+          goToNextStory();
+        }, remainingMs);
+      });
+    });
+  };
 
   const goToStory = (story: StoryWithAuthor | null) => {
     if (!story) {
@@ -141,40 +177,70 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     reader.readAsDataURL(file);
   };
 
-  useEffect(() => {
-    if (!activeStory) {
-      setProgress(0);
+  const handleTogglePause = () => {
+    if (!activeStory) return;
+
+    if (activeStory.media?.type === 'video') {
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (isPaused) {
+        void video.play();
+      } else {
+        video.pause();
+      }
+      setIsPaused((prev) => !prev);
       return;
     }
 
+    if (isPaused) {
+      setIsPaused(false);
+      startImageProgress(progress);
+      return;
+    }
+
+    if (imageStartedAtRef.current !== null) {
+      const elapsed = imageElapsedMsRef.current + (performance.now() - imageStartedAtRef.current);
+      const nextProgress = Math.min((elapsed / activeDurationMs) * 100, 100);
+      imageElapsedMsRef.current = elapsed;
+      imageStartedAtRef.current = null;
+      clearImageTimer();
+      setProgressTransitionMs(0);
+      setProgress(nextProgress);
+    }
+
+    setIsPaused(true);
+  };
+
+  useEffect(() => {
+    if (!activeStory) {
+      setProgress(0);
+      setProgressTransitionMs(0);
+      setIsPaused(false);
+      clearImageTimer();
+      return;
+    }
+
+    clearImageTimer();
     setProgress(0);
+    setProgressTransitionMs(0);
     setActiveDurationMs(activeStory.media?.type === 'video' ? 8000 : 5000);
     setIsMuted(true);
+    setIsPaused(false);
+    imageStartedAtRef.current = null;
+    imageElapsedMsRef.current = 0;
   }, [activeStoryId, activeStory]);
 
   useEffect(() => {
     if (!activeStory) return;
     if (activeStory.media?.type === 'video') return;
 
-    let frameId = 0;
-    const start = performance.now();
+    startImageProgress(0);
 
-    const tick = (timestamp: number) => {
-      const elapsed = timestamp - start;
-      const nextProgress = Math.min((elapsed / activeDurationMs) * 100, 100);
-      setProgress(nextProgress);
-
-      if (nextProgress >= 100) {
-        goToNextStory();
-        return;
-      }
-
-      frameId = window.requestAnimationFrame(tick);
+    return () => {
+      clearImageTimer();
     };
-
-    frameId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [activeStory, activeDurationMs]);
+  }, [activeStoryId, activeDurationMs]);
 
   useEffect(() => {
     if (!activeStory || activeStory.media?.type !== 'video') return;
@@ -201,9 +267,15 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
       frameId = window.requestAnimationFrame(syncProgress);
     };
 
+    if (isPaused) {
+      video.pause();
+    } else {
+      void video.play();
+    }
+
     frameId = window.requestAnimationFrame(syncProgress);
     return () => window.cancelAnimationFrame(frameId);
-  }, [activeStory]);
+  }, [activeStory, isPaused]);
 
   useEffect(() => {
     if (!activeStoryId) return;
@@ -435,8 +507,12 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   {index < activeStoryIndex && <span className="absolute inset-0 bg-white" />}
                   {index === activeStoryIndex && (
                     <span
-                      className="absolute inset-y-0 left-0 bg-white"
-                      style={{ width: `${progress}%` }}
+                      className="absolute inset-y-0 left-0 origin-left bg-white"
+                      style={{
+                        width: '100%',
+                        transform: `scaleX(${progress / 100})`,
+                        transition: progressTransitionMs > 0 ? `transform ${progressTransitionMs}ms linear` : 'none',
+                      }}
                     />
                   )}
                 </span>
@@ -490,6 +566,22 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                     </div>
                     <p className="text-xs text-slate-200">{new Date(activeStory.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>
                   </div>
+                  <button
+                    onClick={handleTogglePause}
+                    className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                    aria-label={isPaused ? 'Resume story' : 'Pause story'}
+                  >
+                    {isPaused ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="8,5 19,12 8,19" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="5" width="4" height="14" rx="1" />
+                        <rect x="14" y="5" width="4" height="14" rx="1" />
+                      </svg>
+                    )}
+                  </button>
                   {activeStory.media?.type === 'video' && (
                     <button
                       onClick={() => setIsMuted((prev) => !prev)}
@@ -512,7 +604,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   )}
                   <button
                     onClick={() => setActiveStoryId(null)}
-                    className="ml-auto rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                    className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18" />
