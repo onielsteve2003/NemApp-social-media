@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTweetStore } from '@/stores/tweetStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import type { TweetWithAuthor } from '@shared-types';
 
 function formatCount(n: number): string {
@@ -53,6 +55,9 @@ export function TweetCard({
 }: TweetCardProps) {
   const router = useRouter();
   const [isShareCopied, setIsShareCopied] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const toggleBlockedUser = useSettingsStore((state) => state.toggleBlockedUser);
   const { toggleLike, toggleRetweet, toggleBookmark, votePollOption, likedIds, retweetedIds, bookmarkedIds } =
     useTweetStore();
   const authorHref = `/profile/${tweet.author.username}`;
@@ -61,6 +66,11 @@ export function TweetCard({
   const isLiked = likedIds.has(tweet.id);
   const isRetweeted = retweetedIds.has(tweet.id);
   const isBookmarked = bookmarkedIds.has(tweet.id);
+
+  const triggerCopiedNotice = () => {
+    setIsShareCopied(true);
+    window.setTimeout(() => setIsShareCopied(false), 1800);
+  };
 
   const goToTweet = () => {
     if (!disableNavigation) {
@@ -82,18 +92,27 @@ export function TweetCard({
         await navigator.clipboard.writeText(absoluteUrl);
       }
 
-      setIsShareCopied(true);
-      window.setTimeout(() => setIsShareCopied(false), 1800);
+      triggerCopiedNotice();
     } catch {
       try {
         await navigator.clipboard.writeText(absoluteUrl);
-        setIsShareCopied(true);
-        window.setTimeout(() => setIsShareCopied(false), 1800);
+        triggerCopiedNotice();
       } catch {
         // If clipboard is unavailable, do nothing silently.
       }
     }
   };
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   return (
     <article
@@ -119,9 +138,7 @@ export function TweetCard({
             {tweet.author.displayName}
           </Link>
           {tweet.author.isVerified && (
-            <svg width="16" height="16" viewBox="0 0 24 24" className="text-sky-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+            <VerifiedBadge size={16} className="shrink-0" />
           )}
           <Link href={authorHref} onClick={(e) => e.stopPropagation()} className="text-slate-400 text-[15px] truncate hover:underline">@{tweet.author.username}</Link>
           <span className="text-slate-500 text-[15px]">·</span>
@@ -129,11 +146,60 @@ export function TweetCard({
             {timeAgo(tweet.createdAt)}
           </span>
           {/* More options */}
-          <button className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-sky-400/10 hover:text-sky-400 text-slate-400">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
-            </svg>
-          </button>
+          <div ref={menuRef} className="relative ml-auto">
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsMenuOpen((prev) => !prev);
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-sky-400/10 hover:text-sky-400 text-slate-400"
+              aria-label="Post options"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+              </svg>
+            </button>
+
+            {isMenuOpen && (
+              <div
+                className="absolute right-0 top-7 z-20 w-48 rounded-xl border border-white/10 bg-slate-900 p-1 shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    router.push(tweetHref);
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/10"
+                >
+                  View post details
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsMenuOpen(false);
+                    try {
+                      await navigator.clipboard.writeText(`${window.location.origin}${tweetHref}`);
+                      triggerCopiedNotice();
+                    } catch {
+                      // Ignore clipboard errors in restricted contexts.
+                    }
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/10"
+                >
+                  Copy post link
+                </button>
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    toggleBlockedUser(tweet.authorId);
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+                >
+                  Hide posts from @{tweet.author.username}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -289,6 +355,10 @@ export function TweetCard({
             hoverColor="sky"
           />
         </div>
+
+        {isShareCopied && (
+          <p className="mt-2 text-xs font-semibold text-emerald-400">Copied successfully</p>
+        )}
       </div>
     </article>
   );
