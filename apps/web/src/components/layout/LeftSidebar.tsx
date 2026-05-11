@@ -71,6 +71,15 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    label: 'Admin',
+    href: '/admin',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z" />
+      </svg>
+    ),
+  },
 ];
 
 export function LeftSidebar({ onNewPost }: { onNewPost: () => void }) {

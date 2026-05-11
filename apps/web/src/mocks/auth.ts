@@ -65,6 +65,26 @@ export const MOCK_USERS: User[] = [
     createdAt: new Date('2023-11-22'),
     updatedAt: new Date('2024-05-11'),
   },
+  {
+    id: 'user-4',
+    username: 'admin',
+    email: 'admin@nemapp.com',
+    displayName: 'NemApp Admin',
+    bio: 'Platform administrator',
+    avatar:
+      'https://api.dicebear.com/7.x/identicon/svg?seed=admin',
+    location: 'HQ',
+    isPrivate: false,
+    isVerified: true,
+    role: 'admin',
+    isEmailVerified: true,
+    followersCount: 120,
+    followingCount: 12,
+    tweetsCount: 18,
+    likesCount: 85,
+    createdAt: new Date('2023-04-02'),
+    updatedAt: new Date('2024-05-11'),
+  },
 ];
 
 // Credentials for demo login
@@ -72,6 +92,12 @@ export const DEMO_CREDENTIALS = {
   email: 'demo@example.com',
   password: 'Demo@1234',
   username: 'demo',
+};
+
+export const ADMIN_CREDENTIALS = {
+  email: 'admin@nemapp.com',
+  password: 'Demo@1234',
+  username: 'admin',
 };
 
 // Mock authentication service
