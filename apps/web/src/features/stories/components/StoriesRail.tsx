@@ -21,12 +21,16 @@ interface StoriesRailProps {
 export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const user = useAuthUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { stories, seedStories, createStory, markSeen, removeExpiredStories } = useStoryStore();
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [caption, setCaption] = useState('');
   const [background, setBackground] = useState(STORY_BACKGROUNDS[0]);
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
+  const [progress, setProgress] = useState(0);
+  const [activeDurationMs, setActiveDurationMs] = useState(5000);
+  const [isMuted, setIsMuted] = useState(true);
 
   useEffect(() => {
     seedStories();
@@ -34,26 +38,81 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   }, [seedStories, removeExpiredStories]);
 
   const orderedStories = useMemo(() => {
-    if (!user) return stories;
-
-    const ownStories = stories.filter((story) => story.authorId === user.id);
-    const unseenStories = stories.filter(
-      (story) => story.authorId !== user.id && !story.seenBy.includes(user.id)
+    return [...stories].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
-    const seenStories = stories.filter(
-      (story) => story.authorId !== user.id && story.seenBy.includes(user.id)
-    );
-
-    return [...ownStories, ...unseenStories, ...seenStories];
   }, [stories, user]);
 
-  const activeStory = orderedStories.find((story) => story.id === activeStoryId) ?? null;
+  const storyGroups = useMemo(() => {
+    const grouped = new Map<string, StoryWithAuthor[]>();
 
-  const handleOpenStory = (story: StoryWithAuthor) => {
+    for (const story of orderedStories) {
+      const existing = grouped.get(story.authorId) ?? [];
+      existing.push(story);
+      grouped.set(story.authorId, existing);
+    }
+
+    const groups = Array.from(grouped.values());
+    const ownGroups = user ? groups.filter((group) => group[0]?.authorId === user.id) : [];
+    const unseenGroups = groups.filter(
+      (group) => !user || (group[0]?.authorId !== user.id && group.some((story) => !story.seenBy.includes(user.id)))
+    );
+    const seenGroups = groups.filter(
+      (group) => user && group[0]?.authorId !== user.id && group.every((story) => story.seenBy.includes(user.id))
+    );
+
+    return user ? [...ownGroups, ...unseenGroups, ...seenGroups] : groups;
+  }, [orderedStories, user]);
+
+  const activeStory = orderedStories.find((story) => story.id === activeStoryId) ?? null;
+  const activeGroupIndex = storyGroups.findIndex((group) => group.some((story) => story.id === activeStoryId));
+  const activeGroup = activeGroupIndex >= 0 ? storyGroups[activeGroupIndex] : null;
+  const activeStoryIndex = activeGroup?.findIndex((story) => story.id === activeStoryId) ?? -1;
+
+  const goToStory = (story: StoryWithAuthor | null) => {
+    if (!story) {
+      setActiveStoryId(null);
+      return;
+    }
+
     setActiveStoryId(story.id);
     if (user) {
       markSeen(story.id, user.id);
     }
+  };
+
+  const goToNextStory = () => {
+    if (!activeGroup || activeStoryIndex < 0) return;
+
+    const nextStoryInGroup = activeGroup[activeStoryIndex + 1] ?? null;
+    if (nextStoryInGroup) {
+      goToStory(nextStoryInGroup);
+      return;
+    }
+
+    const nextGroup = storyGroups[activeGroupIndex + 1] ?? null;
+    goToStory(nextGroup?.[0] ?? null);
+  };
+
+  const goToPreviousStory = () => {
+    if (!activeGroup || activeStoryIndex < 0) return;
+
+    const previousStoryInGroup = activeGroup[activeStoryIndex - 1] ?? null;
+    if (previousStoryInGroup) {
+      goToStory(previousStoryInGroup);
+      return;
+    }
+
+    const previousGroup = storyGroups[activeGroupIndex - 1] ?? null;
+    goToStory(previousGroup ? previousGroup[previousGroup.length - 1] : null);
+  };
+
+  const handleOpenStory = (story: StoryWithAuthor) => {
+    const group = storyGroups.find((candidate) => candidate[0]?.authorId === story.authorId) ?? [story];
+    const firstUnseen = user
+      ? group.find((item) => !item.seenBy.includes(user.id))
+      : group[0];
+    goToStory(firstUnseen ?? group[0] ?? story);
   };
 
   const handleCreateStory = () => {
@@ -74,13 +133,96 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
       if (typeof reader.result === 'string') {
         setSelectedMedia({
           url: reader.result,
-          type: 'image',
+          type: file.type.startsWith('video/') ? 'video' : 'image',
           alt: file.name,
         });
       }
     };
     reader.readAsDataURL(file);
   };
+
+  useEffect(() => {
+    if (!activeStory) {
+      setProgress(0);
+      return;
+    }
+
+    setProgress(0);
+    setActiveDurationMs(activeStory.media?.type === 'video' ? 8000 : 5000);
+    setIsMuted(true);
+  }, [activeStoryId, activeStory]);
+
+  useEffect(() => {
+    if (!activeStory) return;
+    if (activeStory.media?.type === 'video') return;
+
+    let frameId = 0;
+    const start = performance.now();
+
+    const tick = (timestamp: number) => {
+      const elapsed = timestamp - start;
+      const nextProgress = Math.min((elapsed / activeDurationMs) * 100, 100);
+      setProgress(nextProgress);
+
+      if (nextProgress >= 100) {
+        goToNextStory();
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeStory, activeDurationMs]);
+
+  useEffect(() => {
+    if (!activeStory || activeStory.media?.type !== 'video') return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    let frameId = 0;
+
+    const syncProgress = () => {
+      if (!video.duration || Number.isNaN(video.duration)) {
+        frameId = window.requestAnimationFrame(syncProgress);
+        return;
+      }
+
+      setActiveDurationMs(video.duration * 1000);
+      const nextProgress = Math.min((video.currentTime / video.duration) * 100, 100);
+      setProgress(nextProgress);
+
+      if (nextProgress >= 100) {
+        goToNextStory();
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(syncProgress);
+    };
+
+    frameId = window.requestAnimationFrame(syncProgress);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeStory]);
+
+  useEffect(() => {
+    if (!activeStoryId) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowRight') {
+        goToNextStory();
+      }
+      if (event.key === 'ArrowLeft') {
+        goToPreviousStory();
+      }
+      if (event.key === 'Escape') {
+        setActiveStoryId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeStoryId, activeGroupIndex, activeStoryIndex, storyGroups]);
 
   return (
     <>
@@ -125,8 +267,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             </button>
           )}
 
-          {orderedStories.map((story) => {
-            const seen = user ? story.seenBy.includes(user.id) : false;
+          {storyGroups.map((group) => {
+            const story = group[group.length - 1];
+            const seen = user ? group.every((item) => item.seenBy.includes(user.id)) : false;
             return (
               <button
                 key={story.id}
@@ -134,13 +277,22 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                 className="relative h-48 min-w-[128px] overflow-hidden rounded-[28px] border border-white/10 text-left"
               >
                 <div className="absolute inset-0" style={{ background: story.background }} />
-                {story.media && (
+                {story.media?.type === 'video' ? (
+                  <video
+                    src={story.media.url}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : story.media ? (
                   <img
                     src={story.media.url}
                     alt={story.media.alt ?? `${story.author.displayName} story`}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
-                )}
+                ) : null}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/80" />
                 <div className="relative flex h-full flex-col justify-between p-3">
                   <div className={`h-11 w-11 rounded-full p-[2px] ${seen ? 'bg-white/20' : 'bg-gradient-to-br from-fuchsia-500 via-orange-400 to-sky-400'}`}>
@@ -155,6 +307,11 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                       <p className="text-sm font-bold text-white line-clamp-1">{story.author.displayName}</p>
                       {story.author.isVerified && <VerifiedBadge size={14} />}
                     </div>
+                    {group.length > 1 && (
+                      <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-white/80">
+                        {group.length} stories
+                      </p>
+                    )}
                     {story.caption && (
                       <p className="mt-1 text-xs leading-5 text-slate-200 line-clamp-3">{story.caption}</p>
                     )}
@@ -191,13 +348,22 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             <div className="grid gap-5 p-5 md:grid-cols-[1fr_220px]">
               <div>
                 <div className="relative min-h-[360px] overflow-hidden rounded-[28px] border border-white/10 p-5" style={{ background }}>
-                  {selectedMedia && (
+                  {selectedMedia?.type === 'video' ? (
+                    <video
+                      src={selectedMedia.url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                    />
+                  ) : selectedMedia ? (
                     <img
                       src={selectedMedia.url}
                       alt={selectedMedia.alt ?? 'Story media'}
                       className="absolute inset-0 h-full w-full object-cover"
                     />
-                  )}
+                  ) : null}
                   <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/50" />
                   <div className="relative flex h-full flex-col justify-end">
                     <textarea
@@ -229,7 +395,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
                 <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-3">
                   <p className="text-sm font-semibold text-white">Image</p>
-                  <p className="mt-1 text-xs text-slate-400">Optional. Add a vertical image from your device.</p>
+                  <p className="mt-1 text-xs text-slate-400">Optional. Add a vertical image or video from your device.</p>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="mt-3 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
@@ -239,7 +405,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     onChange={handleFileSelect}
                     className="hidden"
                   />
@@ -264,21 +430,51 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="absolute inset-x-0 top-0 z-10 flex gap-1 p-3">
-              {orderedStories.slice(0, Math.min(5, orderedStories.length)).map((story) => (
-                <span
-                  key={story.id}
-                  className={`h-1 flex-1 rounded-full ${story.id === activeStory.id ? 'bg-white' : 'bg-white/25'}`}
-                />
+              {activeGroup?.map((story, index) => (
+                <span key={story.id} className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+                  {index < activeStoryIndex && <span className="absolute inset-0 bg-white" />}
+                  {index === activeStoryIndex && (
+                    <span
+                      className="absolute inset-y-0 left-0 bg-white"
+                      style={{ width: `${progress}%` }}
+                    />
+                  )}
+                </span>
               ))}
             </div>
+            <button
+              onClick={goToPreviousStory}
+              className="absolute inset-y-0 left-0 z-20 w-1/3"
+              aria-label="Previous story"
+            />
+            <button
+              onClick={goToNextStory}
+              className="absolute inset-y-0 right-0 z-20 w-1/3"
+              aria-label="Next story"
+            />
             <div className="relative min-h-[620px]" style={{ background: activeStory.background }}>
-              {activeStory.media && (
+              {activeStory.media?.type === 'video' ? (
+                <video
+                  ref={videoRef}
+                  src={activeStory.media.url}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  autoPlay
+                  playsInline
+                  muted={isMuted}
+                  onLoadedMetadata={(event) => {
+                    if (event.currentTarget.duration) {
+                      setActiveDurationMs(event.currentTarget.duration * 1000);
+                    }
+                  }}
+                  onEnded={goToNextStory}
+                />
+              ) : activeStory.media ? (
                 <img
                   src={activeStory.media.url}
                   alt={activeStory.media.alt ?? `${activeStory.author.displayName} story`}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
-              )}
+              ) : null}
               <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/75" />
               <div className="relative flex min-h-[620px] flex-col justify-between p-5">
                 <div className="mt-6 flex items-center gap-3">
@@ -294,6 +490,26 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                     </div>
                     <p className="text-xs text-slate-200">{new Date(activeStory.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>
                   </div>
+                  {activeStory.media?.type === 'video' && (
+                    <button
+                      onClick={() => setIsMuted((prev) => !prev)}
+                      className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                    >
+                      {isMuted ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                          <line x1="23" y1="9" x2="17" y2="15" />
+                          <line x1="17" y1="9" x2="23" y2="15" />
+                        </svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveStoryId(null)}
                     className="ml-auto rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
@@ -309,7 +525,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   {activeStory.caption && (
                     <p className="text-2xl font-bold leading-9 text-white">{activeStory.caption}</p>
                   )}
-                  <p className="mt-3 text-sm text-white/80">{activeStory.viewersCount} viewers</p>
+                  <p className="mt-3 text-sm text-white/80">
+                    Story {activeStoryIndex + 1} of {activeGroup?.length ?? 1} · {activeStory.viewersCount} viewers
+                  </p>
                 </div>
               </div>
             </div>

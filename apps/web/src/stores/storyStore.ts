@@ -53,28 +53,40 @@ function toAuthorProfile(user: (typeof MOCK_USERS)[number]) {
 function makeSeedStories(): StoryWithAuthor[] {
   const now = Date.now();
 
-  return MOCK_USERS.slice(0, 6).map((user, index) => ({
-    id: `story-${storyIdCounter++}`,
-    authorId: user.id,
-    caption:
-      index % 2 === 0
-        ? 'A quick pulse from my day on NemApp.'
-        : 'Shipping, sketching, and collecting ideas.',
-    background: STORY_BACKGROUNDS[index % STORY_BACKGROUNDS.length],
-    media:
-      index % 3 === 0
-        ? {
-            url: `https://images.unsplash.com/photo-${1500000000000 + index * 4321}?w=900&h=1600&fit=crop`,
-            type: 'image',
-            alt: `${user.displayName} story`,
-          }
-        : undefined,
-    viewersCount: 18 + index * 9,
-    seenBy: index % 2 === 0 ? ['user-1'] : [],
-    createdAt: new Date(now - index * 1000 * 60 * 43),
-    expiresAt: new Date(now + (24 - index) * 1000 * 60 * 60),
-    author: toAuthorProfile(user),
-  }));
+  return MOCK_USERS.slice(0, 6).flatMap((user, userIndex) => {
+    const storyCount = userIndex % 2 === 0 ? 2 : 1;
+
+    return Array.from({ length: storyCount }).map((_, storyIndex) => ({
+      id: `story-${storyIdCounter++}`,
+      authorId: user.id,
+      caption:
+        storyIndex === 0
+          ? userIndex % 2 === 0
+            ? 'A quick pulse from my day on NemApp.'
+            : 'Shipping, sketching, and collecting ideas.'
+          : 'One more angle before this moment disappears.',
+      background: STORY_BACKGROUNDS[(userIndex + storyIndex) % STORY_BACKGROUNDS.length],
+      media:
+        userIndex === 1 && storyIndex === 0
+          ? {
+              url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+              type: 'video',
+              alt: `${user.displayName} story ${storyIndex + 1}`,
+            }
+          : userIndex % 3 === 0
+          ? {
+              url: `https://images.unsplash.com/photo-${1500000000000 + userIndex * 4321 + storyIndex * 219}?w=900&h=1600&fit=crop`,
+              type: 'image',
+              alt: `${user.displayName} story ${storyIndex + 1}`,
+            }
+          : undefined,
+      viewersCount: 18 + userIndex * 9 + storyIndex * 4,
+      seenBy: userIndex % 2 === 0 && storyIndex === 0 ? ['user-1'] : [],
+      createdAt: new Date(now - (userIndex * 2 + storyIndex + 1) * 1000 * 60 * 43),
+      expiresAt: new Date(now + (24 - userIndex) * 1000 * 60 * 60),
+      author: toAuthorProfile(user),
+    }));
+  });
 }
 
 export const useStoryStore = create<StoryState>()(
@@ -114,7 +126,7 @@ export const useStoryStore = create<StoryState>()(
           };
 
           set((state) => ({
-            stories: [story, ...state.stories.filter((item) => item.authorId !== authorId)],
+            stories: [story, ...state.stories],
           }));
         },
 
