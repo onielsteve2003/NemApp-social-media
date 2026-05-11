@@ -198,11 +198,13 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
   const handleCreateStory = () => {
     if (!user) return;
-    createStory(user.id, caption.trim(), background, selectedMedia);
+    const newStoryId = createStory(user.id, caption.trim(), background, selectedMedia);
     setCaption('');
     setSelectedMedia(undefined);
     setBackground(STORY_BACKGROUNDS[0]);
     setIsComposerOpen(false);
+    // auto-open the just-published story so user sees it immediately
+    setActiveStoryId(newStoryId);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {

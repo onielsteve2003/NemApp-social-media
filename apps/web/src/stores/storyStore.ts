@@ -13,7 +13,7 @@ interface StoryState {
     caption: string,
     background: string,
     media?: MediaItem
-  ) => void;
+  ) => string;
   markSeen: (storyId: string, viewerId: string) => void;
   removeExpiredStories: () => void;
 }
@@ -53,10 +53,11 @@ function toAuthorProfile(user: (typeof MOCK_USERS)[number]) {
 function makeSeedStories(): StoryWithAuthor[] {
   const now = Date.now();
 
-  return MOCK_USERS.slice(0, 6).flatMap((user, userIndex) => {
-    const storyCount = userIndex === 0
-      ? 2 + Math.floor(Math.random() * 2)
-      : 1 + Math.floor(Math.random() * 3);
+  // skip user-1 (demo user) — they create their own stories at runtime
+  const seedUsers = MOCK_USERS.filter((u) => u.id !== 'user-1').slice(0, 6);
+
+  return seedUsers.flatMap((user, userIndex) => {
+    const storyCount = 1 + Math.floor(Math.random() * 3);
 
     return Array.from({ length: storyCount }).map((_, storyIndex) => ({
       id: `story-${storyIdCounter++}`,
@@ -64,18 +65,18 @@ function makeSeedStories(): StoryWithAuthor[] {
       caption:
         storyIndex === 0
           ? userIndex % 2 === 0
-            ? 'A quick pulse from my day on NemApp.'
-            : 'Shipping, sketching, and collecting ideas.'
+            ? 'Shipping, sketching, and collecting ideas.'
+            : 'Another day, another update.'
           : 'One more angle before this moment disappears.',
       background: STORY_BACKGROUNDS[(userIndex + storyIndex) % STORY_BACKGROUNDS.length],
       media:
-        userIndex === 1 && storyIndex === 0
+        userIndex === 0 && storyIndex === 0
           ? {
               url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
               type: 'video',
               alt: `${user.displayName} story ${storyIndex + 1}`,
             }
-          : userIndex % 3 === 0
+          : userIndex % 2 === 0
           ? {
               url: `https://images.unsplash.com/photo-${1500000000000 + userIndex * 4321 + storyIndex * 219}?w=900&h=1600&fit=crop`,
               type: 'image',
@@ -106,13 +107,13 @@ export const useStoryStore = create<StoryState>()(
           });
         },
 
-        createStory: (authorId, caption, background, media) => {
+        createStory: (authorId, caption, background, media): string => {
           const author =
             useAuthStore.getState().user?.id === authorId
               ? useAuthStore.getState().user
               : MOCK_USERS.find((user) => user.id === authorId);
 
-          if (!author) return;
+          if (!author) return '';
 
           const story: StoryWithAuthor = {
             id: `story-${storyIdCounter++}`,
@@ -130,6 +131,8 @@ export const useStoryStore = create<StoryState>()(
           set((state) => ({
             stories: [story, ...state.stories],
           }));
+
+          return story.id;
         },
 
         markSeen: (storyId, viewerId) => {
@@ -159,7 +162,7 @@ export const useStoryStore = create<StoryState>()(
       }),
       {
         name: 'story-storage',
-        version: 2,
+        version: 3,
         migrate: (persistedState) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
