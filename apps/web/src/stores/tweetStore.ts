@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { TweetWithAuthor } from '@shared-types';
+import type { TweetWithAuthor, MediaItem, Poll } from '@shared-types';
 import { getMockFeedPage, FEED_PAGE_SIZE, MOCK_TWEETS } from '@/mocks/tweets';
 import { MOCK_USERS } from '@/mocks/auth';
 import { useAuthStore } from '@/stores/authStore';
@@ -19,16 +19,18 @@ interface TweetState {
   // Actions
   fetchFeed: () => Promise<void>;
   fetchMore: () => Promise<void>;
-  createTweet: (content: string, authorId: string) => void;
+  createTweet: (content: string, authorId: string, media?: MediaItem[], poll?: Poll) => void;
   createReply: (
     tweetId: string,
     content: string,
     authorId: string,
-    replyToId?: string
+    replyToId?: string,
+    media?: MediaItem[]
   ) => void;
   toggleLike: (tweetId: string) => void;
   toggleRetweet: (tweetId: string) => void;
   toggleBookmark: (tweetId: string) => void;
+  votePollOption: (tweetId: string, optionId: string) => void;
 }
 
 // Sets are not serializable so we keep them outside the store as module-level state
@@ -36,6 +38,7 @@ interface TweetState {
 const likedIds = new Set<string>();
 const retweetedIds = new Set<string>();
 const bookmarkedIds = new Set<string>();
+const pollVotesByUser = new Set<string>();
 
 let tweetIdCounter = MOCK_TWEETS.length + 1;
 
@@ -138,7 +141,7 @@ export const useTweetStore = create<TweetState>()(
         }));
       },
 
-      createTweet: (content, authorId) => {
+      createTweet: (content, authorId, media, poll) => {
         // Resolve author either from the current feed or user mocks.
         const authorTweet = get().feed.find((t) => t.authorId === authorId);
         const fallbackAuthor = MOCK_USERS.find((u) => u.id === authorId);
@@ -148,6 +151,8 @@ export const useTweetStore = create<TweetState>()(
           id: `tweet-new-${tweetIdCounter++}`,
           authorId,
           content,
+          media: media && media.length > 0 ? media : undefined,
+          poll: poll,
           likesCount: 0,
           repliesCount: 0,
           retweetsCount: 0,
@@ -161,7 +166,7 @@ export const useTweetStore = create<TweetState>()(
         set((s) => ({ feed: [newTweet, ...s.feed] }));
       },
 
-      createReply: (tweetId, content, authorId, replyToId) => {
+      createReply: (tweetId, content, authorId, replyToId, media) => {
         const authorTweet = get().feed.find((t) => t.authorId === authorId);
         const fallbackAuthor = MOCK_USERS.find((u) => u.id === authorId);
         const author = authorTweet?.author ?? (fallbackAuthor ? toAuthorProfile(fallbackAuthor) : null);
@@ -173,6 +178,7 @@ export const useTweetStore = create<TweetState>()(
           id: `tweet-reply-${tweetIdCounter++}`,
           authorId,
           content,
+          media: media && media.length > 0 ? media : undefined,
           likesCount: 0,
           repliesCount: 0,
           retweetsCount: 0,
@@ -259,6 +265,37 @@ export const useTweetStore = create<TweetState>()(
               : t
           ),
         }));
+      },
+
+      votePollOption: (tweetId, optionId) => {
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser) return;
+
+        const voteKey = `${currentUser.id}:${tweetId}`;
+        if (pollVotesByUser.has(voteKey)) return;
+
+        set((s) => ({
+          feed: s.feed.map((t) => {
+            if (t.id !== tweetId || !t.poll) return t;
+
+            const updatedOptions = t.poll.options.map((option) =>
+              option.id === optionId
+                ? { ...option, votes: option.votes + 1 }
+                : option
+            );
+
+            return {
+              ...t,
+              poll: {
+                ...t.poll,
+                options: updatedOptions,
+                totalVotes: t.poll.totalVotes + 1,
+              },
+            };
+          }),
+        }));
+
+        pollVotesByUser.add(voteKey);
       },
     }),
     { name: 'tweet-store' }

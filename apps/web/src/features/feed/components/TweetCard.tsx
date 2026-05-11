@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTweetStore } from '@/stores/tweetStore';
@@ -51,7 +52,8 @@ export function TweetCard({
   onReplyClick,
 }: TweetCardProps) {
   const router = useRouter();
-  const { toggleLike, toggleRetweet, toggleBookmark, likedIds, retweetedIds, bookmarkedIds } =
+  const [isShareCopied, setIsShareCopied] = useState(false);
+  const { toggleLike, toggleRetweet, toggleBookmark, votePollOption, likedIds, retweetedIds, bookmarkedIds } =
     useTweetStore();
   const authorHref = `/profile/${tweet.author.username}`;
   const tweetHref = `/post/${tweet.id}`;
@@ -63,6 +65,33 @@ export function TweetCard({
   const goToTweet = () => {
     if (!disableNavigation) {
       router.push(tweetHref);
+    }
+  };
+
+  const handleShare = async () => {
+    const absoluteUrl = `${window.location.origin}${tweetHref}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${tweet.author.displayName} on NemApp`,
+          text: tweet.content,
+          url: absoluteUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(absoluteUrl);
+      }
+
+      setIsShareCopied(true);
+      window.setTimeout(() => setIsShareCopied(false), 1800);
+    } catch {
+      try {
+        await navigator.clipboard.writeText(absoluteUrl);
+        setIsShareCopied(true);
+        window.setTimeout(() => setIsShareCopied(false), 1800);
+      } catch {
+        // If clipboard is unavailable, do nothing silently.
+      }
     }
   };
 
@@ -111,6 +140,72 @@ export function TweetCard({
         <p className="text-[15px] text-white/90 leading-[1.55] whitespace-pre-line break-words mb-3">
           {renderContent(tweet.content)}
         </p>
+
+        {tweet.media && tweet.media.length > 0 && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-white/8">
+            {tweet.media.length === 1 ? (
+              <img
+                src={tweet.media[0].url}
+                alt={tweet.media[0].alt ?? 'Tweet media'}
+                className={`w-full max-h-[480px] ${
+                  tweet.media[0].type === 'gif'
+                    ? 'bg-slate-950 object-contain object-[center_72%]'
+                    : 'object-cover'
+                }`}
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-1 p-1">
+                {tweet.media.slice(0, 4).map((media, index) => (
+                  <img
+                    key={`${tweet.id}-media-${index}`}
+                    src={media.url}
+                    alt={media.alt ?? `Tweet media ${index + 1}`}
+                    className={`h-40 w-full rounded ${
+                      media.type === 'gif'
+                        ? 'bg-slate-950 object-contain object-[center_72%]'
+                        : 'object-cover'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tweet.poll && (
+          <div className="mb-3 space-y-2 rounded-2xl border border-white/8 p-3">
+            {tweet.poll.options.map((option) => {
+              const percentage =
+                tweet.poll && tweet.poll.totalVotes > 0
+                  ? Math.round((option.votes / tweet.poll.totalVotes) * 100)
+                  : 0;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    votePollOption(tweet.id, option.id);
+                  }}
+                  className="relative w-full overflow-hidden rounded-lg border border-white/10 px-3 py-2 text-left transition-colors hover:bg-white/5"
+                >
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-0 bg-sky-400/20"
+                    style={{ width: `${percentage}%` }}
+                  />
+                  <div className="relative z-10 flex items-center justify-between gap-2">
+                    <span className="text-sm text-white">{option.text}</span>
+                    <span className="text-xs text-slate-300">{percentage}%</span>
+                  </div>
+                </button>
+              );
+            })}
+            <div className="pt-1 text-xs text-slate-400">
+              {formatCount(tweet.poll.totalVotes)} votes
+            </div>
+          </div>
+        )}
 
         {/* Action bar */}
         <div className="flex items-center justify-between max-w-[360px] -ml-2">
@@ -186,7 +281,11 @@ export function TweetCard({
                 <line x1="12" y1="2" x2="12" y2="15" />
               </svg>
             }
-            onClick={() => {}}
+            onClick={() => {
+              void handleShare();
+            }}
+            active={isShareCopied}
+            activeColor="text-sky-400"
             hoverColor="sky"
           />
         </div>

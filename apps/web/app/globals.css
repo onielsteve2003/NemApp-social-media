@@ -47,6 +47,22 @@ body {
   display: none;
 }
 
+/* Hide emoji picker scrollbar */
+.epr::-webkit-scrollbar,
+.epr-emoji-list::-webkit-scrollbar,
+.epr-category-nav::-webkit-scrollbar,
+.epr *::-webkit-scrollbar {
+  display: none;
+}
+
+.epr,
+.epr-emoji-list,
+.epr-category-nav,
+.epr * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Light theme overrides */
 html.theme-light body {
   background-color: #f8fafc;

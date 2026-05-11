@@ -74,6 +74,22 @@ export function FeedList({ tab = 'for-you' }: FeedListProps) {
     );
   }
 
+  // Empty state for Following tab
+  if (!isLoading && visibleFeed.length === 0 && tab === 'following') {
+    return (
+      <div className="flex flex-col">
+        <TweetComposer />
+        <div className="flex flex-col items-center justify-center py-12 px-4">
+          <div className="text-5xl mb-4">🔍</div>
+          <h2 className="text-xl font-bold text-white mb-2">No tweets yet</h2>
+          <p className="text-slate-400 text-center">
+            Start following people to see their tweets in your Following feed
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col">
       <TweetComposer />

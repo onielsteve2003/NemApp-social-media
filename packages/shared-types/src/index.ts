@@ -41,11 +41,25 @@ export interface MediaItem {
   alt?: string;
 }
 
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+
+export interface Poll {
+  id: string;
+  options: PollOption[];
+  totalVotes: number;
+  expiresAt: Date;
+}
+
 export interface Tweet {
   id: string;
   authorId: string;
   content: string;
   media?: MediaItem[];
+  poll?: Poll;
   likesCount: number;
   repliesCount: number;
   retweetsCount: number;
