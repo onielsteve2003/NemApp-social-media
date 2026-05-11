@@ -188,7 +188,7 @@ export const useStoryStore = create<StoryState>()(
 
         reshareStory: (storyId, resharedById) => {
           const sourceStory = get().stories.find((story) => story.id === storyId);
-          if (!sourceStory || sourceStory.authorId === resharedById) {
+          if (!sourceStory) {
             return '';
           }
 
@@ -206,7 +206,7 @@ export const useStoryStore = create<StoryState>()(
             authorId: resharedById,
             caption: sourceStory.caption,
             background: sourceStory.background,
-            media: sourceStory.media,
+            media: sourceStory.media ? { ...sourceStory.media } : undefined,
             viewersCount: 0,
             seenBy: [],
             likedBy: [],

@@ -123,6 +123,10 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const activeGroupIndex = storyGroups.findIndex((group) => group.some((story) => story.id === activeStoryId));
   const activeGroup = activeGroupIndex >= 0 ? storyGroups[activeGroupIndex] : null;
   const activeStoryIndex = activeGroup?.findIndex((story) => story.id === activeStoryId) ?? -1;
+  const latestOwnStory = useMemo(() => {
+    if (!user) return null;
+    return orderedStories.filter((story) => story.authorId === user.id).at(-1) ?? null;
+  }, [orderedStories, user]);
   const userLookup = useMemo(() => {
     const map = new Map<string, StoryWithAuthor['author']>();
     for (const mockUser of MOCK_USERS) {
@@ -269,6 +273,15 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     setActiveStoryId(newStoryId);
   };
 
+  const handleOpenOwnStoryOrComposer = () => {
+    if (latestOwnStory) {
+      goToStory(latestOwnStory);
+      return;
+    }
+
+    setIsComposerOpen(true);
+  };
+
   const handleDeleteActiveStory = () => {
     if (!activeStory || !user || activeStory.authorId !== user.id) {
       return;
@@ -281,6 +294,8 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     const nextStoryToOpen = nextStoryInGroup ?? previousStoryInGroup ?? fallbackNextGroup ?? fallbackPreviousGroup;
 
     deleteStory(activeStory.id, user.id);
+    setActionMessage('Story deleted successfully');
+    window.setTimeout(() => setActionMessage(''), 2200);
     if (nextStoryToOpen && nextStoryToOpen.id !== activeStory.id) {
       goToStory(nextStoryToOpen);
       return;
@@ -304,6 +319,8 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
     const newStoryId = reshareStory(activeStory.id, user.id);
     if (!newStoryId) {
+      setActionMessage('Unable to reshare this story');
+      window.setTimeout(() => setActionMessage(''), 2200);
       return;
     }
 
@@ -531,7 +548,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
         >
           {user && (
             <button
-              onClick={() => setIsComposerOpen(true)}
+              onClick={handleOpenOwnStoryOrComposer}
               className="group relative h-48 min-w-[128px] overflow-hidden rounded-[28px] border border-dashed border-white/15 bg-slate-900/80 p-3 text-left hover:border-sky-400/60 hover:bg-slate-900 transition-colors"
             >
               <div
@@ -547,7 +564,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-white">Your story</p>
-                  <p className="mt-1 text-xs text-slate-300">Share a mood, image, or update.</p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    {latestOwnStory ? 'Tap to view your latest story.' : 'Share a mood, image, or update.'}
+                  </p>
                 </div>
               </div>
             </button>
@@ -734,12 +753,12 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             </div>
             <button
               onClick={goToPreviousStory}
-              className="absolute inset-y-0 left-0 z-20 w-1/3"
+              className="absolute bottom-0 left-0 top-24 z-20 w-1/3"
               aria-label="Previous story"
             />
             <button
               onClick={goToNextStory}
-              className="absolute inset-y-0 right-0 z-20 w-1/3"
+              className="absolute bottom-0 right-0 top-24 z-20 w-1/3"
               aria-label="Next story"
             />
             <div className="relative min-h-[620px]" style={{ background: activeStory.background }}>
