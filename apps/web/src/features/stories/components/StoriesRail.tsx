@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthUser } from '@/stores/authStore';
 import { useStoryStore } from '@/stores/storyStore';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
+import { MOCK_USERS } from '@/mocks/auth';
 import type { MediaItem, StoryWithAuthor } from '@shared-types';
 
 const STORY_BACKGROUNDS = [
@@ -28,9 +29,20 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const preloadedMediaRef = useRef(new Set<string>());
   const goToNextStoryRef = useRef<() => void>(() => {});
   const railScrollRef = useRef<HTMLDivElement>(null);
-  const { stories, seedStories, createStory, markSeen, removeExpiredStories } = useStoryStore();
+  const {
+    stories,
+    seedStories,
+    createStory,
+    markSeen,
+    toggleLike,
+    deleteStory,
+    reshareStory,
+    removeExpiredStories,
+  } = useStoryStore();
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [isAudienceModalOpen, setIsAudienceModalOpen] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
   const [caption, setCaption] = useState('');
   const [background, setBackground] = useState(STORY_BACKGROUNDS[0]);
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
@@ -39,7 +51,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const [progressTransitionMs, setProgressTransitionMs] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
-  const [viewerAuthorId, setViewerAuthorId] = useState<string | null>(null);
+  const wasPausedBeforeAudienceModalRef = useRef(false);
 
   useEffect(() => {
     seedStories();
@@ -111,6 +123,49 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const activeGroupIndex = storyGroups.findIndex((group) => group.some((story) => story.id === activeStoryId));
   const activeGroup = activeGroupIndex >= 0 ? storyGroups[activeGroupIndex] : null;
   const activeStoryIndex = activeGroup?.findIndex((story) => story.id === activeStoryId) ?? -1;
+  const userLookup = useMemo(() => {
+    const map = new Map<string, StoryWithAuthor['author']>();
+    for (const mockUser of MOCK_USERS) {
+      map.set(mockUser.id, {
+        id: mockUser.id,
+        username: mockUser.username,
+        displayName: mockUser.displayName,
+        bio: mockUser.bio,
+        avatar: mockUser.avatar,
+        coverImage: mockUser.coverImage,
+        location: mockUser.location,
+        website: mockUser.website,
+        isPrivate: mockUser.isPrivate,
+        isVerified: mockUser.isVerified,
+        role: mockUser.role,
+        followersCount: mockUser.followersCount,
+        followingCount: mockUser.followingCount,
+        tweetsCount: mockUser.tweetsCount,
+        likesCount: mockUser.likesCount,
+        createdAt: mockUser.createdAt,
+        updatedAt: mockUser.updatedAt,
+      });
+    }
+
+    for (const story of orderedStories) {
+      map.set(story.authorId, story.author);
+    }
+
+    return map;
+  }, [orderedStories]);
+  const activeStoryViewerProfiles = useMemo(() => {
+    if (!activeStory) return [];
+    return activeStory.seenBy
+      .map((viewerId) => userLookup.get(viewerId))
+      .filter((profile): profile is StoryWithAuthor['author'] => Boolean(profile));
+  }, [activeStory, userLookup]);
+  const activeStoryLikerProfiles = useMemo(() => {
+    if (!activeStory) return [];
+    return activeStory.likedBy
+      .map((likerId) => userLookup.get(likerId))
+      .filter((profile): profile is StoryWithAuthor['author'] => Boolean(profile));
+  }, [activeStory, userLookup]);
+  const isStoryLikedByMe = Boolean(user && activeStory?.likedBy.includes(user.id));
 
   const clearImageTimer = () => {
     if (imageTimeoutRef.current !== null) {
@@ -121,7 +176,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
   const closeViewer = () => {
     setActiveStoryId(null);
-    setViewerAuthorId(null);
+    setIsAudienceModalOpen(false);
   };
 
   const startImageProgress = (fromProgress = 0, durationMs = activeDurationMs) => {
@@ -169,12 +224,6 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
       return;
     }
 
-    // Keep playback inside the opened author's stories.
-    if (viewerAuthorId && activeGroup[0]?.authorId === viewerAuthorId) {
-      closeViewer();
-      return;
-    }
-
     const nextGroup = storyGroups[activeGroupIndex + 1] ?? null;
     goToStory(nextGroup?.[0] ?? null);
   };
@@ -196,7 +245,6 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   };
 
   const handleOpenStory = (story: StoryWithAuthor) => {
-    setViewerAuthorId(story.authorId);
     const group = storyGroups.find((candidate) => candidate[0]?.authorId === story.authorId) ?? [story];
     if (user && story.authorId === user.id) {
       goToStory(story);
@@ -212,12 +260,55 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const handleCreateStory = () => {
     if (!user) return;
     const newStoryId = createStory(user.id, caption.trim(), background, selectedMedia);
+    if (!newStoryId) return;
     setCaption('');
     setSelectedMedia(undefined);
     setBackground(STORY_BACKGROUNDS[0]);
     setIsComposerOpen(false);
     // auto-open the just-published story so user sees it immediately
-    setViewerAuthorId(user.id);
+    setActiveStoryId(newStoryId);
+  };
+
+  const handleDeleteActiveStory = () => {
+    if (!activeStory || !user || activeStory.authorId !== user.id) {
+      return;
+    }
+
+    const nextStoryInGroup = activeGroup?.[activeStoryIndex + 1] ?? null;
+    const previousStoryInGroup = activeGroup?.[activeStoryIndex - 1] ?? null;
+    const fallbackNextGroup = storyGroups[activeGroupIndex + 1]?.[0] ?? null;
+    const fallbackPreviousGroup = storyGroups[activeGroupIndex - 1]?.[0] ?? null;
+    const nextStoryToOpen = nextStoryInGroup ?? previousStoryInGroup ?? fallbackNextGroup ?? fallbackPreviousGroup;
+
+    deleteStory(activeStory.id, user.id);
+    if (nextStoryToOpen && nextStoryToOpen.id !== activeStory.id) {
+      goToStory(nextStoryToOpen);
+      return;
+    }
+
+    closeViewer();
+  };
+
+  const handleToggleLike = () => {
+    if (!activeStory || !user) {
+      return;
+    }
+
+    toggleLike(activeStory.id, user.id);
+  };
+
+  const handleReshareStory = () => {
+    if (!activeStory || !user) {
+      return;
+    }
+
+    const newStoryId = reshareStory(activeStory.id, user.id);
+    if (!newStoryId) {
+      return;
+    }
+
+    setActionMessage('Story reshared successfully');
+    window.setTimeout(() => setActionMessage(''), 2200);
     setActiveStoryId(newStoryId);
   };
 
@@ -271,6 +362,43 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
 
     setIsPaused(true);
+  };
+
+  const pauseForAudienceModal = () => {
+    if (!activeStory) return;
+
+    wasPausedBeforeAudienceModalRef.current = isPaused;
+    if (isPaused) return;
+
+    if (activeStory.media?.type === 'video') {
+      setIsPaused(true);
+      return;
+    }
+
+    if (imageStartedAtRef.current !== null) {
+      const elapsed = imageElapsedMsRef.current + (performance.now() - imageStartedAtRef.current);
+      const nextProgress = Math.min((elapsed / activeDurationMs) * 100, 100);
+      imageElapsedMsRef.current = elapsed;
+      imageStartedAtRef.current = null;
+      clearImageTimer();
+      setProgressTransitionMs(0);
+      setProgress(nextProgress);
+    }
+
+    setIsPaused(true);
+  };
+
+  const resumeAfterAudienceModal = () => {
+    if (!activeStory) return;
+    if (wasPausedBeforeAudienceModalRef.current) return;
+
+    if (activeStory.media?.type === 'video') {
+      setIsPaused(false);
+      return;
+    }
+
+    setIsPaused(false);
+    startImageProgress(progress, activeDurationMs);
   };
 
   useEffect(() => {
@@ -690,6 +818,35 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                       )}
                     </button>
                   )}
+                  {user && activeStory.authorId !== user.id && (
+                    <button
+                      onClick={handleReshareStory}
+                      className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                      aria-label="Reshare story"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="17 1 21 5 17 9" />
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                        <polyline points="7 23 3 19 7 15" />
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                      </svg>
+                    </button>
+                  )}
+                  {user && activeStory.authorId === user.id && (
+                    <button
+                      onClick={handleDeleteActiveStory}
+                      className="rounded-full p-2 text-red-200/90 hover:bg-red-500/20 hover:text-red-100"
+                      aria-label="Delete story"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={closeViewer}
                     className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
@@ -702,15 +859,123 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                 </div>
 
                 <div>
+                  {activeStory.resharedFromUserId && (
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/80">
+                      Reshared from @{userLookup.get(activeStory.resharedFromUserId)?.username ?? 'unknown'}
+                    </p>
+                  )}
                   {activeStory.caption && (
                     <p className="text-2xl font-bold leading-9 text-white">{activeStory.caption}</p>
                   )}
-                  <p className="mt-3 text-sm text-white/80">
-                    Story {activeStoryIndex + 1} of {activeGroup?.length ?? 1} · {activeStory.viewersCount} viewers
-                  </p>
+                  <div className="mt-3 flex items-center gap-3 text-sm text-white/80">
+                    <button
+                      onClick={handleToggleLike}
+                      className={`rounded-full px-3 py-1.5 font-semibold transition-colors ${isStoryLikedByMe ? 'bg-pink-500/30 text-pink-100' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+                    >
+                      {isStoryLikedByMe ? 'Liked' : 'Like'} ({activeStory.likedBy.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        pauseForAudienceModal();
+                        setIsAudienceModalOpen(true);
+                      }}
+                      className="rounded-full bg-white/10 px-3 py-1.5 font-semibold text-white/90 hover:bg-white/20"
+                    >
+                      {activeStory.viewersCount} viewers
+                    </button>
+                    <p>
+                      Story {activeStoryIndex + 1} of {activeGroup?.length ?? 1}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeStory && isAudienceModalOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setIsAudienceModalOpen(false);
+            resumeAfterAudienceModal();
+          }}
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-white">Story audience</h3>
+                <p className="text-xs text-slate-400">People who viewed and liked this story.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAudienceModalOpen(false);
+                  resumeAfterAudienceModal();
+                }}
+                className="rounded-full p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="grid gap-4 p-5 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Viewers ({activeStoryViewerProfiles.length})</p>
+                <div className="space-y-2">
+                  {activeStoryViewerProfiles.length === 0 && (
+                    <p className="text-sm text-slate-400">No viewers yet.</p>
+                  )}
+                  {activeStoryViewerProfiles.map((profile) => (
+                    <div key={`viewer-${profile.id}`} className="flex items-center gap-2 rounded-xl bg-white/5 px-2 py-2">
+                      <img
+                        src={profile.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
+                        alt={profile.displayName}
+                        className="h-8 w-8 rounded-full"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-white">{profile.displayName}</p>
+                        <p className="text-xs text-slate-400">@{profile.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Likes ({activeStoryLikerProfiles.length})</p>
+                <div className="space-y-2">
+                  {activeStoryLikerProfiles.length === 0 && (
+                    <p className="text-sm text-slate-400">No likes yet.</p>
+                  )}
+                  {activeStoryLikerProfiles.map((profile) => (
+                    <div key={`liker-${profile.id}`} className="flex items-center gap-2 rounded-xl bg-white/5 px-2 py-2">
+                      <img
+                        src={profile.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
+                        alt={profile.displayName}
+                        className="h-8 w-8 rounded-full"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-white">{profile.displayName}</p>
+                        <p className="text-xs text-slate-400">@{profile.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="fixed inset-x-0 top-5 z-[70] flex justify-center px-4">
+          <div className="rounded-full border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 shadow-lg backdrop-blur">
+            {actionMessage}
           </div>
         </div>
       )}

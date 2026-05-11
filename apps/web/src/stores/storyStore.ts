@@ -15,6 +15,9 @@ interface StoryState {
     media?: MediaItem
   ) => string;
   markSeen: (storyId: string, viewerId: string) => void;
+  toggleLike: (storyId: string, userId: string) => void;
+  deleteStory: (storyId: string, requesterId: string) => void;
+  reshareStory: (storyId: string, resharedById: string) => string;
   removeExpiredStories: () => void;
 }
 
@@ -85,6 +88,7 @@ function makeSeedStories(): StoryWithAuthor[] {
           : undefined,
       viewersCount: 18 + userIndex * 9 + storyIndex * 4,
       seenBy: userIndex % 2 === 0 && storyIndex === 0 ? ['user-1'] : [],
+      likedBy: userIndex % 3 === 0 ? ['user-1'] : [],
       createdAt: new Date(now - (userIndex * 2 + storyIndex + 1) * 1000 * 60 * 43),
       expiresAt: new Date(now + (24 - userIndex) * 1000 * 60 * 60),
       author: toAuthorProfile(user),
@@ -123,6 +127,7 @@ export const useStoryStore = create<StoryState>()(
             media,
             viewersCount: 0,
             seenBy: [],
+            likedBy: [],
             createdAt: new Date(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
             author: toAuthorProfile(author),
@@ -151,6 +156,74 @@ export const useStoryStore = create<StoryState>()(
           }));
         },
 
+        toggleLike: (storyId, userId) => {
+          set((state) => ({
+            stories: state.stories.map((story) => {
+              if (story.id !== storyId) {
+                return story;
+              }
+
+              if (story.likedBy.includes(userId)) {
+                return {
+                  ...story,
+                  likedBy: story.likedBy.filter((id) => id !== userId),
+                };
+              }
+
+              return {
+                ...story,
+                likedBy: [...story.likedBy, userId],
+              };
+            }),
+          }));
+        },
+
+        deleteStory: (storyId, requesterId) => {
+          set((state) => ({
+            stories: state.stories.filter(
+              (story) => !(story.id === storyId && story.authorId === requesterId)
+            ),
+          }));
+        },
+
+        reshareStory: (storyId, resharedById) => {
+          const sourceStory = get().stories.find((story) => story.id === storyId);
+          if (!sourceStory || sourceStory.authorId === resharedById) {
+            return '';
+          }
+
+          const author =
+            useAuthStore.getState().user?.id === resharedById
+              ? useAuthStore.getState().user
+              : MOCK_USERS.find((candidate) => candidate.id === resharedById);
+
+          if (!author) {
+            return '';
+          }
+
+          const resharedStory: StoryWithAuthor = {
+            id: `story-${storyIdCounter++}`,
+            authorId: resharedById,
+            caption: sourceStory.caption,
+            background: sourceStory.background,
+            media: sourceStory.media,
+            viewersCount: 0,
+            seenBy: [],
+            likedBy: [],
+            resharedFromStoryId: sourceStory.id,
+            resharedFromUserId: sourceStory.authorId,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            author: toAuthorProfile(author),
+          };
+
+          set((state) => ({
+            stories: [resharedStory, ...state.stories],
+          }));
+
+          return resharedStory.id;
+        },
+
         removeExpiredStories: () => {
           const now = Date.now();
           set((state) => ({
@@ -162,7 +235,7 @@ export const useStoryStore = create<StoryState>()(
       }),
       {
         name: 'story-storage',
-        version: 3,
+        version: 4,
         migrate: (persistedState) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;

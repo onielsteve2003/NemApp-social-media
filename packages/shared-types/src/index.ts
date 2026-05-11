@@ -164,6 +164,9 @@ export interface Story {
   media?: MediaItem;
   viewersCount: number;
   seenBy: string[];
+  likedBy: string[];
+  resharedFromStoryId?: string;
+  resharedFromUserId?: string;
   createdAt: Date;
   expiresAt: Date;
 }
