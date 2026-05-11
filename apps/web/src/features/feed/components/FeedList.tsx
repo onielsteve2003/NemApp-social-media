@@ -3,14 +3,27 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useSocialStore } from '@/stores/socialStore';
 import { TweetCard } from './TweetCard';
 import { TweetComposer } from './TweetComposer';
 
-export function FeedList() {
+interface FeedListProps {
+  tab?: 'for-you' | 'following';
+}
+
+export function FeedList({ tab = 'for-you' }: FeedListProps) {
   const { feed, isLoading, isFetchingMore, hasMore, fetchFeed, fetchMore } = useTweetStore();
   const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
+  const followingIds = useSocialStore((state) => state.followingIds);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const visibleFeed = feed.filter((tweet) => !blockedUserIds.includes(tweet.authorId));
+  
+  // Filter based on blocked users
+  let visibleFeed = feed.filter((tweet) => !blockedUserIds.includes(tweet.authorId));
+  
+  // Filter based on tab
+  if (tab === 'following') {
+    visibleFeed = visibleFeed.filter((tweet) => followingIds.includes(tweet.authorId));
+  }
 
   // Initial load
   useEffect(() => {

@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { FeedList } from '@/features/feed/components/FeedList';
 
 export default function HomePage() {
+  const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
+
   return (
     <div>
       {/* Feed header */}
@@ -12,15 +15,29 @@ export default function HomePage() {
 
       {/* Feed tabs */}
       <div className="flex border-b border-white/8">
-        <button className="flex-1 py-4 text-[15px] font-semibold text-white border-b-2 border-sky-400 hover:bg-white/5 transition-colors">
+        <button
+          onClick={() => setActiveTab('for-you')}
+          className={`flex-1 py-4 text-[15px] font-semibold transition-colors ${
+            activeTab === 'for-you'
+              ? 'text-white border-b-2 border-sky-400'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
           For you
         </button>
-        <button className="flex-1 py-4 text-[15px] font-medium text-slate-400 hover:bg-white/5 transition-colors hover:text-white">
+        <button
+          onClick={() => setActiveTab('following')}
+          className={`flex-1 py-4 text-[15px] font-semibold transition-colors ${
+            activeTab === 'following'
+              ? 'text-white border-b-2 border-sky-400'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+        >
           Following
         </button>
       </div>
 
-      <FeedList />
+      <FeedList tab={activeTab} />
     </div>
   );
 }
