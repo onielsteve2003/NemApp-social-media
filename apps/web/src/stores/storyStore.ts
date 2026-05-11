@@ -54,7 +54,9 @@ function makeSeedStories(): StoryWithAuthor[] {
   const now = Date.now();
 
   return MOCK_USERS.slice(0, 6).flatMap((user, userIndex) => {
-    const storyCount = userIndex % 2 === 0 ? 2 : 1;
+    const storyCount = userIndex === 0
+      ? 2 + Math.floor(Math.random() * 2)
+      : 1 + Math.floor(Math.random() * 3);
 
     return Array.from({ length: storyCount }).map((_, storyIndex) => ({
       id: `story-${storyIdCounter++}`,
@@ -157,6 +159,18 @@ export const useStoryStore = create<StoryState>()(
       }),
       {
         name: 'story-storage',
+        version: 2,
+        migrate: (persistedState) => {
+          if (!persistedState || typeof persistedState !== 'object') {
+            return persistedState;
+          }
+
+          return {
+            ...persistedState,
+            stories: [],
+            initialized: false,
+          };
+        },
       }
     ),
     { name: 'story-store' }

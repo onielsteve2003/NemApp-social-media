@@ -25,6 +25,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const imageTimeoutRef = useRef<number | null>(null);
   const imageStartedAtRef = useRef<number | null>(null);
   const imageElapsedMsRef = useRef(0);
+  const preloadedMediaRef = useRef(new Set<string>());
+  const goToNextStoryRef = useRef<() => void>(() => {});
+  const railScrollRef = useRef<HTMLDivElement>(null);
   const { stories, seedStories, createStory, markSeen, removeExpiredStories } = useStoryStore();
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -42,9 +45,43 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     removeExpiredStories();
   }, [seedStories, removeExpiredStories]);
 
+  useEffect(() => {
+    for (const story of stories) {
+      const media = story.media;
+      if (!media || preloadedMediaRef.current.has(media.url)) {
+        continue;
+      }
+
+      if (media.type === 'image') {
+        const image = new window.Image();
+        image.src = media.url;
+      } else {
+        const video = document.createElement('video');
+        video.preload = 'auto';
+        video.src = media.url;
+        video.load();
+      }
+
+      preloadedMediaRef.current.add(media.url);
+    }
+  }, [stories]);
+
   const orderedStories = useMemo(() => {
     return [...stories].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      (a, b) => {
+        const timeDelta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (timeDelta !== 0) {
+          return timeDelta;
+        }
+
+        const sequenceA = Number(a.id.replace('story-', ''));
+        const sequenceB = Number(b.id.replace('story-', ''));
+        if (!Number.isNaN(sequenceA) && !Number.isNaN(sequenceB) && sequenceA !== sequenceB) {
+          return sequenceA - sequenceB;
+        }
+
+        return a.id.localeCompare(b.id);
+      }
     );
   }, [stories, user]);
 
@@ -81,25 +118,25 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
   };
 
-  const startImageProgress = (fromProgress = 0) => {
+  const startImageProgress = (fromProgress = 0, durationMs = activeDurationMs) => {
     clearImageTimer();
     setProgressTransitionMs(0);
     setProgress(fromProgress);
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const remainingMs = activeDurationMs * (1 - fromProgress / 100);
+        const remainingMs = durationMs * (1 - fromProgress / 100);
         if (remainingMs <= 0) {
-          goToNextStory();
+          goToNextStoryRef.current();
           return;
         }
 
         imageStartedAtRef.current = performance.now();
-        imageElapsedMsRef.current = (fromProgress / 100) * activeDurationMs;
+        imageElapsedMsRef.current = (fromProgress / 100) * durationMs;
         setProgressTransitionMs(remainingMs);
         setProgress(100);
         imageTimeoutRef.current = window.setTimeout(() => {
-          goToNextStory();
+          goToNextStoryRef.current();
         }, remainingMs);
       });
     });
@@ -112,7 +149,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
 
     setActiveStoryId(story.id);
-    if (user) {
+    if (user && story.authorId !== user.id) {
       markSeen(story.id, user.id);
     }
   };
@@ -130,6 +167,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     goToStory(nextGroup?.[0] ?? null);
   };
 
+  // keep ref in sync so setTimeout callbacks always call the latest version
+  goToNextStoryRef.current = goToNextStory;
+
   const goToPreviousStory = () => {
     if (!activeGroup || activeStoryIndex < 0) return;
 
@@ -145,6 +185,11 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
   const handleOpenStory = (story: StoryWithAuthor) => {
     const group = storyGroups.find((candidate) => candidate[0]?.authorId === story.authorId) ?? [story];
+    if (user && story.authorId === user.id) {
+      goToStory(story);
+      return;
+    }
+
     const firstUnseen = user
       ? group.find((item) => !item.seenBy.includes(user.id))
       : group[0];
@@ -195,7 +240,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
     if (isPaused) {
       setIsPaused(false);
-      startImageProgress(progress);
+      startImageProgress(progress, activeDurationMs);
       return;
     }
 
@@ -213,7 +258,11 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   };
 
   useEffect(() => {
-    if (!activeStory) {
+    // depend only on activeStoryId — not activeStory (object ref) — to avoid
+    // spurious resets whenever the stories array reference changes
+    const story = orderedStories.find((s) => s.id === activeStoryId) ?? null;
+
+    if (!story) {
       setProgress(0);
       setProgressTransitionMs(0);
       setIsPaused(false);
@@ -224,26 +273,30 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     clearImageTimer();
     setProgress(0);
     setProgressTransitionMs(0);
-    setActiveDurationMs(activeStory.media?.type === 'video' ? 8000 : 5000);
+    setActiveDurationMs(story.media?.type === 'video' ? 8000 : 5000);
     setIsMuted(true);
     setIsPaused(false);
     imageStartedAtRef.current = null;
     imageElapsedMsRef.current = 0;
-  }, [activeStoryId, activeStory]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryId]);
 
   useEffect(() => {
-    if (!activeStory) return;
-    if (activeStory.media?.type === 'video') return;
+    const story = orderedStories.find((s) => s.id === activeStoryId) ?? null;
+    if (!story) return;
+    if (story.media?.type === 'video') return;
 
-    startImageProgress(0);
+    startImageProgress(0, activeDurationMs);
 
     return () => {
       clearImageTimer();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStoryId, activeDurationMs]);
 
   useEffect(() => {
-    if (!activeStory || activeStory.media?.type !== 'video') return;
+    const story = orderedStories.find((s) => s.id === activeStoryId) ?? null;
+    if (!story || story.media?.type !== 'video') return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -275,7 +328,8 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
     frameId = window.requestAnimationFrame(syncProgress);
     return () => window.cancelAnimationFrame(frameId);
-  }, [activeStory, isPaused]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryId, isPaused]);
 
   useEffect(() => {
     if (!activeStoryId) return;
@@ -312,7 +366,23 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
           </button>
         </div>
 
+        <div className="group/rail relative">
+        <button
+          onClick={() => { railScrollRef.current?.scrollBy({ left: -280, behavior: 'smooth' }); }}
+          className="absolute left-0 top-1/2 z-10 -translate-y-1/2 -translate-x-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/90 border border-white/10 text-white shadow-lg opacity-0 transition-opacity group-hover/rail:opacity-100 hover:bg-slate-800"
+          aria-label="Scroll stories left"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <button
+          onClick={() => { railScrollRef.current?.scrollBy({ left: 280, behavior: 'smooth' }); }}
+          className="absolute right-0 top-1/2 z-10 -translate-y-1/2 translate-x-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/90 border border-white/10 text-white shadow-lg opacity-0 transition-opacity group-hover/rail:opacity-100 hover:bg-slate-800"
+          aria-label="Scroll stories right"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
         <div
+          ref={railScrollRef}
           className={`no-scrollbar flex gap-3 overflow-x-auto pb-1 ${expanded ? 'flex-wrap overflow-visible' : ''}`}
         >
           {user && (
@@ -392,6 +462,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
               </button>
             );
           })}
+        </div>
         </div>
       </section>
 
@@ -507,11 +578,10 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   {index < activeStoryIndex && <span className="absolute inset-0 bg-white" />}
                   {index === activeStoryIndex && (
                     <span
-                      className="absolute inset-y-0 left-0 origin-left bg-white"
+                      className="absolute inset-y-0 left-0 bg-white"
                       style={{
-                        width: '100%',
-                        transform: `scaleX(${progress / 100})`,
-                        transition: progressTransitionMs > 0 ? `transform ${progressTransitionMs}ms linear` : 'none',
+                        width: `${progress}%`,
+                        transition: progressTransitionMs > 0 ? `width ${progressTransitionMs}ms linear` : 'none',
                       }}
                     />
                   )}
@@ -531,6 +601,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             <div className="relative min-h-[620px]" style={{ background: activeStory.background }}>
               {activeStory.media?.type === 'video' ? (
                 <video
+                  key={activeStory.id}
                   ref={videoRef}
                   src={activeStory.media.url}
                   className="absolute inset-0 h-full w-full object-cover"
@@ -546,13 +617,14 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                 />
               ) : activeStory.media ? (
                 <img
+                  key={activeStory.id}
                   src={activeStory.media.url}
                   alt={activeStory.media.alt ?? `${activeStory.author.displayName} story`}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               ) : null}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/75" />
-              <div className="relative flex min-h-[620px] flex-col justify-between p-5">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/75" />
+              <div className="relative z-10 flex min-h-[620px] flex-col justify-between p-5">
                 <div className="mt-6 flex items-center gap-3">
                   <img
                     src={activeStory.author.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeStory.author.username}`}
