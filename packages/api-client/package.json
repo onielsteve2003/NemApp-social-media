@@ -1,0 +1,21 @@
+{
+  "name": "@social-media/api-client",
+  "version": "1.0.0",
+  "description": "Shared API client for frontend",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@social-media/shared-types": "file:../shared-types",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^6.0.3"
+  }
+}

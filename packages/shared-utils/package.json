@@ -1,0 +1,16 @@
+{
+  "name": "@social-media/shared-utils",
+  "version": "1.0.0",
+  "description": "Shared utilities for frontend and backend",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

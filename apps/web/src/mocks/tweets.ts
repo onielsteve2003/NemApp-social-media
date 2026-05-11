@@ -1,0 +1,215 @@
+import type { TweetWithAuthor } from '@shared-types';
+import { MOCK_USERS } from './auth';
+
+const [demo, alice, bob] = MOCK_USERS;
+
+const toProfile = (user: (typeof MOCK_USERS)[number]) => ({
+  id: user.id,
+  username: user.username,
+  displayName: user.displayName,
+  bio: user.bio,
+  avatar: user.avatar,
+  coverImage: user.coverImage,
+  location: user.location,
+  website: user.website,
+  isPrivate: user.isPrivate,
+  isVerified: user.isVerified,
+  role: user.role,
+  followersCount: user.followersCount,
+  followingCount: user.followingCount,
+  tweetsCount: user.tweetsCount,
+  likesCount: user.likesCount,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+export const MOCK_TWEETS: TweetWithAuthor[] = [
+  {
+    id: 'tweet-1',
+    authorId: alice.id,
+    content:
+      "Just shipped a major feature after two weeks of grinding 🚀 The feeling of seeing it go live never gets old. #buildinpublic #webdev",
+    likesCount: 248,
+    repliesCount: 31,
+    retweetsCount: 62,
+    bookmarksCount: 44,
+    mentions: [],
+    hashtags: ['buildinpublic', 'webdev'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 8),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 8),
+    author: toProfile(alice),
+  },
+  {
+    id: 'tweet-2',
+    authorId: demo.id,
+    content:
+      "Hot take: the best productivity hack is just being ruthlessly honest about what actually matters. Everything else is noise.",
+    likesCount: 512,
+    repliesCount: 88,
+    retweetsCount: 143,
+    bookmarksCount: 201,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 22),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 22),
+    author: toProfile(demo),
+  },
+  {
+    id: 'tweet-3',
+    authorId: bob.id,
+    content:
+      "Typography in UI design is criminally underrated. The difference between 14px and 15px line-height can make or break an entire layout. Details matter. #design #ux",
+    likesCount: 183,
+    repliesCount: 24,
+    retweetsCount: 55,
+    bookmarksCount: 77,
+    mentions: [],
+    hashtags: ['design', 'ux'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 45),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 45),
+    author: toProfile(bob),
+  },
+  {
+    id: 'tweet-4',
+    authorId: alice.id,
+    content:
+      "I've been using TypeScript for 4 years and I still learn something new every week. The ecosystem just keeps growing 🔥\n\nWhat's your favourite TS feature right now?",
+    likesCount: 394,
+    repliesCount: 107,
+    retweetsCount: 89,
+    bookmarksCount: 136,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 90),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 90),
+    author: toProfile(alice),
+  },
+  {
+    id: 'tweet-5',
+    authorId: demo.id,
+    content:
+      "PSA: Your side project doesn't need to be perfect before you share it. Ship it, learn from feedback, iterate. The only bad side project is the one that stays in a private repo forever.",
+    likesCount: 876,
+    repliesCount: 54,
+    retweetsCount: 298,
+    bookmarksCount: 412,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 150),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 150),
+    author: toProfile(demo),
+  },
+  {
+    id: 'tweet-6',
+    authorId: bob.id,
+    content:
+      "Redesigned our onboarding flow today. Reduced it from 7 steps to 3. Conversion jumped 40% in the first hour of A/B testing 📈 #startups #growth",
+    likesCount: 621,
+    repliesCount: 72,
+    retweetsCount: 178,
+    bookmarksCount: 245,
+    mentions: [],
+    hashtags: ['startups', 'growth'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3),
+    author: toProfile(bob),
+  },
+  {
+    id: 'tweet-7',
+    authorId: alice.id,
+    content:
+      "Reminder that REST APIs are not \"old\" or \"bad\". They're proven, simple, and work beautifully at scale. GraphQL and tRPC are great tools, but not every problem needs them.",
+    likesCount: 1043,
+    repliesCount: 193,
+    retweetsCount: 317,
+    bookmarksCount: 522,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 5),
+    author: toProfile(alice),
+  },
+  {
+    id: 'tweet-8',
+    authorId: demo.id,
+    content:
+      "Built a full-stack app this weekend using Next.js 14, Zustand, and Socket.IO. Real-time feeds are genuinely magical ✨ Open sourcing it once I clean up the code.",
+    likesCount: 457,
+    repliesCount: 41,
+    retweetsCount: 112,
+    bookmarksCount: 188,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
+    author: toProfile(demo),
+  },
+  {
+    id: 'tweet-9',
+    authorId: bob.id,
+    content:
+      "Dark mode isn't just a preference, it's a statement. Light mode users are out here flexing their healthy eyes 😂 #darkmode",
+    likesCount: 2184,
+    repliesCount: 341,
+    retweetsCount: 698,
+    bookmarksCount: 301,
+    mentions: [],
+    hashtags: ['darkmode'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 12),
+    author: toProfile(bob),
+  },
+  {
+    id: 'tweet-10',
+    authorId: alice.id,
+    content:
+      "Things I wish someone told me before I started freelancing:\n\n• Charge more than you think\n• Scope creep is real, have a contract\n• Relationships > portfolios\n• Rest is productive too\n\nAnything to add?",
+    likesCount: 3291,
+    repliesCount: 487,
+    retweetsCount: 1204,
+    bookmarksCount: 1876,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 18),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 18),
+    author: toProfile(alice),
+  },
+  {
+    id: 'tweet-11',
+    authorId: demo.id,
+    content:
+      "The gap between junior and senior dev isn't the number of languages you know — it's how you think about trade-offs. Every decision has a cost. Learn to see them.",
+    likesCount: 2847,
+    repliesCount: 218,
+    retweetsCount: 892,
+    bookmarksCount: 1103,
+    mentions: [],
+    hashtags: [],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    author: toProfile(demo),
+  },
+  {
+    id: 'tweet-12',
+    authorId: bob.id,
+    content:
+      "Your brand is not your logo. Your brand is how people feel when they interact with you. Build for the feeling. #branding #design",
+    likesCount: 1524,
+    repliesCount: 96,
+    retweetsCount: 467,
+    bookmarksCount: 832,
+    mentions: [],
+    hashtags: ['branding', 'design'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 30),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 30),
+    author: toProfile(bob),
+  },
+];
+
+// Simulated page size for infinite scroll
+export const FEED_PAGE_SIZE = 10;
+
+export function getMockFeedPage(page: number): TweetWithAuthor[] {
+  const start = page * FEED_PAGE_SIZE;
+  return MOCK_TWEETS.slice(start, start + FEED_PAGE_SIZE);
+}

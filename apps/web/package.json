@@ -1,0 +1,46 @@
+{
+  "name": "@social-media/web",
+  "version": "1.0.0",
+  "description": "Social media frontend application",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "@social-media/api-client": "file:../../packages/api-client",
+    "@social-media/shared-types": "file:../../packages/shared-types",
+    "@social-media/shared-utils": "file:../../packages/shared-utils",
+    "@social-media/ui": "file:../../packages/ui",
+    "autoprefixer": "^10.5.0",
+    "axios": "^1.6.2",
+    "next": "^14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "socket.io-client": "^4.7.2",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "prettier": "^3.1.0",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
+    "vite": "^5.0.8",
+    "vitest": "^1.1.0"
+  }
+}

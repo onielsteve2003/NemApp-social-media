@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist
+build
+.next
+out
+coverage
+
+# Development
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+.vscode
+.idea
+
+# Testing
+.nyc_output
+jest.config.js
+.coverage
+
+# Runtime
+pid
+*.seed
+*.pid.lock
+
+# IDE
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+Thumbs.db
+.DS_Store

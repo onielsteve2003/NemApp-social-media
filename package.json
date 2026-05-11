@@ -1,0 +1,41 @@
+{
+  "name": "social-media",
+  "version": "1.0.0",
+  "description": "Production-grade Twitter/X clone - MERN stack",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,green \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "npm run dev --workspace @social-media/web",
+    "dev:api": "npm run dev:tsx --workspace @social-media/api",
+    "dev:storybook": "npm run storybook --workspace @social-media/ui",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace @social-media/web",
+    "build:api": "npm run build --workspace @social-media/api",
+    "build:ui": "npm run build --workspace @social-media/ui",
+    "test": "npm run test --workspaces --if-present",
+    "test:web": "npm run test --workspace @social-media/web",
+    "test:api": "npm run test --workspace @social-media/api",
+    "test:e2e": "npm run test --workspace @social-media/e2e",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
+    "type-check": "npm run type-check --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prettier": "^3.1.0",
+    "typescript": "^6.0.3",
+    "concurrently": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=10.0.0"
+  }
+}

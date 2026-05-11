@@ -1,0 +1,63 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": ".next",
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "allowArbitraryExtensions": true,
+    "jsx": "preserve",
+    "jsxImportSource": "react",
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@shared-types": [
+        "../../packages/shared-types/src"
+      ],
+      "@shared-types/*": [
+        "../../packages/shared-types/src/*"
+      ],
+      "@ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@api-client": [
+        "../../packages/api-client/src"
+      ],
+      "@api-client/*": [
+        "../../packages/api-client/src/*"
+      ],
+      "@shared-utils": [
+        "../../packages/shared-utils/src"
+      ],
+      "@shared-utils/*": [
+        "../../packages/shared-utils/src/*"
+      ]
+    },
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "isolatedModules": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.d.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
