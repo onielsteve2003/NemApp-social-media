@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthUser } from '@/stores/authStore';
 import { useMessageStore } from '@/stores/messageStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useSocialStore } from '@/stores/socialStore';
 
 function formatTime(date: Date): string {
   return new Date(date).toLocaleTimeString([], {
@@ -13,6 +15,11 @@ function formatTime(date: Date): string {
 
 export default function MessagesPage() {
   const user = useAuthUser();
+  const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
+  const allowMessagesFromEveryone = useSettingsStore(
+    (state) => state.privacyPreferences.allowMessagesFromEveryone
+  );
+  const followingIds = useSocialStore((state) => state.followingIds);
   const {
     conversations,
     messagesByConversation,
@@ -31,9 +38,20 @@ export default function MessagesPage() {
     }
   }, [user, seedMessages]);
 
+  const visibleConversations = useMemo(
+    () =>
+      conversations.filter(
+        (conversation) => !blockedUserIds.includes(conversation.participantId)
+      ),
+    [conversations, blockedUserIds]
+  );
+
   const activeConversation = useMemo(
-    () => conversations.find((conversation) => conversation.id === activeConversationId) ?? null,
-    [conversations, activeConversationId]
+    () =>
+      visibleConversations.find(
+        (conversation) => conversation.id === activeConversationId
+      ) ?? null,
+    [visibleConversations, activeConversationId]
   );
 
   const activeMessages =
@@ -42,6 +60,11 @@ export default function MessagesPage() {
   const participant = activeConversation
     ? getParticipant(activeConversation.participantId)
     : null;
+
+  const canMessageParticipant =
+    !participant ||
+    allowMessagesFromEveryone ||
+    followingIds.includes(participant.id);
 
   const handleSend = () => {
     if (!activeConversationId || draft.trim().length === 0) return;
@@ -59,10 +82,10 @@ export default function MessagesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] min-h-[calc(100vh-66px)]">
         <aside className="border-b md:border-b-0 md:border-r border-white/8 no-scrollbar overflow-y-auto max-h-[260px] md:max-h-none">
-          {conversations.length === 0 ? (
+          {visibleConversations.length === 0 ? (
             <p className="px-4 py-6 text-sm text-slate-400">No conversations yet.</p>
           ) : (
-            conversations.map((conversation) => {
+            visibleConversations.map((conversation) => {
               const person = getParticipant(conversation.participantId);
               const active = conversation.id === activeConversationId;
 
@@ -139,12 +162,17 @@ export default function MessagesPage() {
                       handleSend();
                     }
                   }}
-                  placeholder="Start a new message"
+                  placeholder={
+                    canMessageParticipant
+                      ? 'Start a new message'
+                      : 'Enable messages from everyone or follow this user'
+                  }
+                  disabled={!canMessageParticipant}
                   className="flex-1 rounded-full bg-slate-800 border border-white/10 px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
                 />
                 <button
                   onClick={handleSend}
-                  disabled={draft.trim().length === 0}
+                  disabled={draft.trim().length === 0 || !canMessageParticipant}
                   className="rounded-full bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-sky-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Send

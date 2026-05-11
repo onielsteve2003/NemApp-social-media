@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuthUser } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 function timeAgo(date: Date): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -42,6 +43,7 @@ export default function NotificationsPage() {
     markAllAsRead,
     clearAll,
   } = useNotificationStore();
+  const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
 
   useEffect(() => {
     if (user) {
@@ -52,12 +54,15 @@ export default function NotificationsPage() {
   const userNotifications = useMemo(() => {
     if (!user) return [];
     return notifications
-      .filter((item) => item.userId === user.id)
+      .filter(
+        (item) =>
+          item.userId === user.id && !blockedUserIds.includes(item.actorId)
+      )
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-  }, [notifications, user]);
+  }, [notifications, user, blockedUserIds]);
 
   const unreadCount = userNotifications.filter((item) => !item.isRead).length;
 

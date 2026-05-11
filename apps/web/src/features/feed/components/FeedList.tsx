@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useTweetStore } from '@/stores/tweetStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { TweetCard } from './TweetCard';
 import { TweetComposer } from './TweetComposer';
 
 export function FeedList() {
   const { feed, isLoading, isFetchingMore, hasMore, fetchFeed, fetchMore } = useTweetStore();
+  const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const visibleFeed = feed.filter((tweet) => !blockedUserIds.includes(tweet.authorId));
 
   // Initial load
   useEffect(() => {
@@ -43,7 +46,7 @@ export function FeedList() {
     if (docHeight <= viewportHeight + 40) {
       fetchMore();
     }
-  }, [feed.length, isLoading, isFetchingMore, hasMore, fetchMore]);
+  }, [visibleFeed.length, isLoading, isFetchingMore, hasMore, fetchMore]);
 
   if (isLoading) {
     return (
@@ -62,7 +65,7 @@ export function FeedList() {
     <div className="flex flex-col">
       <TweetComposer />
       <div>
-        {feed.map((tweet) => (
+        {visibleFeed.map((tweet) => (
           <TweetCard key={tweet.id} tweet={tweet} />
         ))}
       </div>
@@ -76,7 +79,7 @@ export function FeedList() {
         </div>
       )}
 
-      {!hasMore && feed.length > 0 && (
+      {!hasMore && visibleFeed.length > 0 && (
         <div className="py-8 text-center text-sm text-slate-500">
           You&apos;re all caught up! 🎉
         </div>

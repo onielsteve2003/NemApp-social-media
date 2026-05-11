@@ -3,6 +3,7 @@ import { devtools, persist } from 'zustand/middleware';
 import type { NotificationType, NotificationWithActor, User, UserProfile } from '@shared-types';
 import { MOCK_USERS } from '@/mocks/auth';
 import { useAuthStore } from '@/stores/authStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 interface NotificationState {
   notifications: NotificationWithActor[];
@@ -52,6 +53,26 @@ function getUserById(userId: string): User | null {
     return authUser;
   }
   return MOCK_USERS.find((user) => user.id === userId) ?? null;
+}
+
+function isNotificationEnabled(type: NotificationType): boolean {
+  const prefs = useSettingsStore.getState().notificationPreferences;
+  switch (type) {
+    case 'like':
+      return prefs.likes;
+    case 'follow':
+      return prefs.follows;
+    case 'reply':
+      return prefs.replies;
+    case 'mention':
+      return prefs.mentions;
+    case 'message':
+      return prefs.messages;
+    case 'retweet':
+      return prefs.replies;
+    default:
+      return true;
+  }
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -107,6 +128,12 @@ export const useNotificationStore = create<NotificationState>()(
         },
 
         addNotification: (userId, actorId, type, targetId) => {
+          if (!isNotificationEnabled(type)) return;
+          if (actorId === userId) return;
+
+          const blockedUserIds = useSettingsStore.getState().blockedUserIds;
+          if (blockedUserIds.includes(actorId)) return;
+
           const actor = getUserById(actorId);
           if (!actor) return;
 
