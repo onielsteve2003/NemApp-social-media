@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTweetStore } from '@/stores/tweetStore';
 import { MOCK_USERS } from '@/mocks/auth';
 import { TweetCard } from '@/features/feed/components/TweetCard';
@@ -32,9 +33,29 @@ function formatCount(value: number): string {
 }
 
 export default function ExplorePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const feed = useTweetStore((state) => state.feed);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [activeTab, setActiveTab] = useState<ExploreTab>('top');
+
+  useEffect(() => {
+    const nextQ = searchParams.get('q') ?? '';
+    setQuery(nextQ);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const q = query.trim();
+    const currentQ = searchParams.get('q') ?? '';
+    if (q === currentQ) return;
+
+    if (q.length === 0) {
+      router.replace('/explore');
+      return;
+    }
+
+    router.replace(`/explore?q=${encodeURIComponent(q)}`);
+  }, [query, router, searchParams]);
 
   const queryNorm = normalize(query);
 

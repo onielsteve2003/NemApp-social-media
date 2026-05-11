@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 const TRENDING = [
@@ -35,8 +36,19 @@ const WHO_TO_FOLLOW = [
 ];
 
 export function RightSidebar() {
+  const router = useRouter();
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q.length === 0) {
+      router.push('/explore');
+      return;
+    }
+    router.push(`/explore?q=${encodeURIComponent(q)}`);
+  };
 
   const toggleFollow = (id: string) => {
     setFollowing((prev) => {
@@ -50,7 +62,7 @@ export function RightSidebar() {
   return (
     <aside className="hidden lg:flex flex-col gap-4 w-[350px] shrink-0 py-3 px-4">
       {/* Search */}
-      <div className="relative">
+      <form className="relative" onSubmit={handleSearchSubmit}>
         <svg
           className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
           width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -65,7 +77,7 @@ export function RightSidebar() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full rounded-full bg-slate-800 pl-11 pr-4 py-3 text-sm text-white placeholder-slate-500 border border-transparent focus:border-sky-400 focus:outline-none transition-colors"
         />
-      </div>
+      </form>
 
       {/* Trending */}
       <div className="rounded-2xl bg-slate-800/60 border border-white/6 overflow-hidden">

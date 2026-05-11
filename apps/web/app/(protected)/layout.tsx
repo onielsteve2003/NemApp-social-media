@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsAuthenticated } from '@/stores/authStore';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
@@ -13,7 +13,15 @@ export default function ProtectedLayout({
 }) {
   const router = useRouter();
   const isAuthenticated = useIsAuthenticated();
-  const [showComposer, setShowComposer] = useState(false);
+
+  const handleNewPost = () => {
+    router.push('/home');
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('nemapp:new-post'));
+      }, 120);
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -34,7 +42,7 @@ export default function ProtectedLayout({
 
   return (
     <div className="h-screen overflow-hidden bg-slate-950 text-white flex">
-      <LeftSidebar onNewPost={() => setShowComposer(true)} />
+      <LeftSidebar onNewPost={handleNewPost} />
 
       {/* Main content — offset by sidebar width */}
       <div className="flex flex-1 ml-[72px] xl:ml-64 justify-center h-screen overflow-hidden">
@@ -48,27 +56,6 @@ export default function ProtectedLayout({
           <RightSidebar />
         </div>
       </div>
-
-      {/* Mobile compose modal (future: animate) */}
-      {showComposer && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-start justify-center pt-16"
-          onClick={() => setShowComposer(false)}
-        >
-          <div
-            className="bg-slate-900 rounded-2xl w-full max-w-lg mx-4 p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-sm text-slate-400 mb-2">New Post (use the composer in feed)</p>
-            <button
-              onClick={() => setShowComposer(false)}
-              className="text-sky-400 text-sm hover:underline"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

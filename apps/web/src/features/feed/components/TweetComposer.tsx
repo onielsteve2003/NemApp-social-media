@@ -20,6 +20,22 @@ export function TweetComposer() {
     el.style.height = `${el.scrollHeight}px`;
   }, [content]);
 
+  useEffect(() => {
+    const handleFocusComposer = () => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    window.addEventListener('nemapp:new-post', handleFocusComposer);
+    return () => {
+      window.removeEventListener('nemapp:new-post', handleFocusComposer);
+    };
+  }, []);
+
   if (!user) return null;
 
   const charsLeft = MAX_CHARS - content.length;
@@ -60,6 +76,7 @@ export function TweetComposer() {
         {/* Input area */}
         <div className="flex-1 min-w-0">
           <textarea
+            id="tweet-composer"
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
