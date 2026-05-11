@@ -39,6 +39,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const [progressTransitionMs, setProgressTransitionMs] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [viewerAuthorId, setViewerAuthorId] = useState<string | null>(null);
 
   useEffect(() => {
     seedStories();
@@ -118,6 +119,11 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
   };
 
+  const closeViewer = () => {
+    setActiveStoryId(null);
+    setViewerAuthorId(null);
+  };
+
   const startImageProgress = (fromProgress = 0, durationMs = activeDurationMs) => {
     clearImageTimer();
     setProgressTransitionMs(0);
@@ -144,7 +150,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
   const goToStory = (story: StoryWithAuthor | null) => {
     if (!story) {
-      setActiveStoryId(null);
+      closeViewer();
       return;
     }
 
@@ -160,6 +166,12 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     const nextStoryInGroup = activeGroup[activeStoryIndex + 1] ?? null;
     if (nextStoryInGroup) {
       goToStory(nextStoryInGroup);
+      return;
+    }
+
+    // Keep playback inside the opened author's stories.
+    if (viewerAuthorId && activeGroup[0]?.authorId === viewerAuthorId) {
+      closeViewer();
       return;
     }
 
@@ -184,6 +196,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   };
 
   const handleOpenStory = (story: StoryWithAuthor) => {
+    setViewerAuthorId(story.authorId);
     const group = storyGroups.find((candidate) => candidate[0]?.authorId === story.authorId) ?? [story];
     if (user && story.authorId === user.id) {
       goToStory(story);
@@ -204,6 +217,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     setBackground(STORY_BACKGROUNDS[0]);
     setIsComposerOpen(false);
     // auto-open the just-published story so user sees it immediately
+    setViewerAuthorId(user.id);
     setActiveStoryId(newStoryId);
   };
 
@@ -344,7 +358,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
         goToPreviousStory();
       }
       if (event.key === 'Escape') {
-        setActiveStoryId(null);
+        closeViewer();
       }
     };
 
@@ -569,7 +583,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
       )}
 
       {activeStory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setActiveStoryId(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={closeViewer}>
           <div
             className="relative w-full max-w-sm overflow-hidden rounded-[36px] border border-white/10 bg-slate-950 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -677,7 +691,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                     </button>
                   )}
                   <button
-                    onClick={() => setActiveStoryId(null)}
+                    onClick={closeViewer}
                     className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
