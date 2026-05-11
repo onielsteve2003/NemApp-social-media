@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useTweetStore } from '@/stores/tweetStore';
 import { MOCK_USERS } from '@/mocks/auth';
 import { TweetCard } from '@/features/feed/components/TweetCard';
@@ -32,30 +32,24 @@ function formatCount(value: number): string {
   return `${value}`;
 }
 
+function getStableTrendCount(hashtag: string): number {
+  let hash = 0;
+  for (let i = 0; i < hashtag.length; i += 1) {
+    hash = (hash * 31 + hashtag.charCodeAt(i)) % 100000;
+  }
+  return 1200 + (hash % 5000);
+}
+
 export default function ExplorePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const urlQuery = searchParams.get('q') ?? '';
   const feed = useTweetStore((state) => state.feed);
-  const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const [query, setQuery] = useState(urlQuery);
   const [activeTab, setActiveTab] = useState<ExploreTab>('top');
 
   useEffect(() => {
-    const nextQ = searchParams.get('q') ?? '';
-    setQuery(nextQ);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const q = query.trim();
-    const currentQ = searchParams.get('q') ?? '';
-    if (q === currentQ) return;
-
-    if (q.length === 0) {
-      router.replace('/explore');
-      return;
-    }
-
-    router.replace(`/explore?q=${encodeURIComponent(q)}`);
-  }, [query, router, searchParams]);
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   const queryNorm = normalize(query);
 
@@ -101,7 +95,7 @@ export default function ExplorePage() {
     for (const trend of TREND_CANDIDATES) {
       const hashtag = trend.toLowerCase();
       if (!hashtagCounts.has(hashtag)) {
-        hashtagCounts.set(hashtag, Math.floor(Math.random() * 5000) + 1200);
+        hashtagCounts.set(hashtag, getStableTrendCount(hashtag));
       }
     }
 
