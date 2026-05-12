@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useIsAuthenticated } from '@/stores/authStore';
+import { useAuthStore, useIsAuthenticated } from '@/stores/authStore';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
 import { RightSidebar } from '@/components/layout/RightSidebar';
 
@@ -13,6 +13,9 @@ export default function ProtectedLayout({
 }) {
   const router = useRouter();
   const isAuthenticated = useIsAuthenticated();
+  const login = useAuthStore((state) => state.login);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const autoDemoEnabled = useAuthStore((state) => state.autoDemoEnabled);
 
   const handleNewPost = () => {
     router.push('/home');
@@ -24,18 +27,28 @@ export default function ProtectedLayout({
   };
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
+    if (isAuthenticated || isAuthLoading) {
+      return;
     }
-  }, [isAuthenticated, router]);
+
+    if (!autoDemoEnabled) {
+      router.push('/login');
+      return;
+    }
+
+    void login('demo@example.com', 'Demo@1234').catch(() => {
+      router.push('/login');
+    });
+  }, [isAuthenticated, isAuthLoading, autoDemoEnabled, login, router]);
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-slate-950">
         <svg className="animate-spin text-sky-400" width="32" height="32" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
+        <p className="text-sm text-slate-300">Starting demo session...</p>
       </div>
     );
   }

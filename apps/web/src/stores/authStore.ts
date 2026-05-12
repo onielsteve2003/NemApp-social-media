@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import type { User } from '@shared-types';
+import { ApiClient } from '@api-client';
 import { mockAuthService } from '@/mocks/auth';
 
 interface AuthState {
@@ -9,6 +10,7 @@ interface AuthState {
   refreshToken: string | null;
   isLoading: boolean;
   error: string | null;
+  autoDemoEnabled: boolean;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
@@ -21,6 +23,41 @@ interface AuthState {
   logout: () => Promise<void>;
   clearError: () => void;
   setUser: (user: User | null) => void;
+  setAutoDemoEnabled: (enabled: boolean) => void;
+}
+
+interface AuthApiResponse {
+  success: boolean;
+  data: {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+  };
+}
+
+const apiClient = new ApiClient({
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+  timeout: 12000,
+});
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const errorObject = error as { error?: { message?: string }; message?: string };
+    if (errorObject.error?.message) return errorObject.error.message;
+    if (errorObject.message) return errorObject.message;
+  }
+  return fallback;
+}
+
+function shouldFallbackToMock(error: unknown) {
+  const message = getErrorMessage(error, '').toLowerCase();
+  return (
+    message.includes('network error') ||
+    message.includes('econnrefused') ||
+    message.includes('failed to fetch') ||
+    message.includes('timeout')
+  );
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -32,20 +69,49 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: null,
         isLoading: false,
         error: null,
+        autoDemoEnabled: true,
 
         login: async (email: string, password: string) => {
           set({ isLoading: true, error: null });
           try {
-            const response = await mockAuthService.login(email, password);
+            const response = await apiClient.post<AuthApiResponse>('/api/auth/login', {
+              email,
+              password,
+            });
+
+            apiClient.setAuthToken(response.data.accessToken);
+            apiClient.setRefreshToken(response.data.refreshToken);
             set({
-              user: response.user,
-              token: response.token,
-              refreshToken: response.refreshToken,
+              user: response.data.user,
+              token: response.data.accessToken,
+              refreshToken: response.data.refreshToken,
+              autoDemoEnabled: true,
               isLoading: false,
             });
           } catch (error) {
+            if (shouldFallbackToMock(error)) {
+              try {
+                const fallbackResponse = await mockAuthService.login(email, password);
+                set({
+                  user: fallbackResponse.user,
+                  token: fallbackResponse.token,
+                  refreshToken: fallbackResponse.refreshToken,
+                  autoDemoEnabled: true,
+                  isLoading: false,
+                });
+                return;
+              } catch (fallbackError) {
+                const fallbackMessage = getErrorMessage(fallbackError, 'Login failed');
+                set({
+                  error: fallbackMessage,
+                  isLoading: false,
+                });
+                throw fallbackError;
+              }
+            }
+
             const message =
-              error instanceof Error ? error.message : 'Login failed';
+              getErrorMessage(error, 'Login failed');
             set({
               error: message,
               isLoading: false,
@@ -62,21 +128,51 @@ export const useAuthStore = create<AuthState>()(
         ) => {
           set({ isLoading: true, error: null });
           try {
-            const response = await mockAuthService.register(
+            const response = await apiClient.post<AuthApiResponse>('/api/auth/register', {
               username,
               email,
               password,
-              displayName
-            );
+              displayName,
+            });
+
+            apiClient.setAuthToken(response.data.accessToken);
+            apiClient.setRefreshToken(response.data.refreshToken);
             set({
-              user: response.user,
-              token: response.token,
-              refreshToken: response.refreshToken,
+              user: response.data.user,
+              token: response.data.accessToken,
+              refreshToken: response.data.refreshToken,
+              autoDemoEnabled: true,
               isLoading: false,
             });
           } catch (error) {
+            if (shouldFallbackToMock(error)) {
+              try {
+                const fallbackResponse = await mockAuthService.register(
+                  username,
+                  email,
+                  password,
+                  displayName
+                );
+                set({
+                  user: fallbackResponse.user,
+                  token: fallbackResponse.token,
+                  refreshToken: fallbackResponse.refreshToken,
+                  autoDemoEnabled: true,
+                  isLoading: false,
+                });
+                return;
+              } catch (fallbackError) {
+                const fallbackMessage = getErrorMessage(fallbackError, 'Registration failed');
+                set({
+                  error: fallbackMessage,
+                  isLoading: false,
+                });
+                throw fallbackError;
+              }
+            }
+
             const message =
-              error instanceof Error ? error.message : 'Registration failed';
+              getErrorMessage(error, 'Registration failed');
             set({
               error: message,
               isLoading: false,
@@ -88,11 +184,17 @@ export const useAuthStore = create<AuthState>()(
         logout: async () => {
           set({ isLoading: true });
           try {
-            await mockAuthService.logout();
+            try {
+              await apiClient.post('/api/auth/logout');
+            } catch {
+              await mockAuthService.logout();
+            }
+            apiClient.clearAuthToken();
             set({
               user: null,
               token: null,
               refreshToken: null,
+              autoDemoEnabled: false,
               isLoading: false,
             });
           } catch (error) {
@@ -104,6 +206,7 @@ export const useAuthStore = create<AuthState>()(
         clearError: () => set({ error: null }),
 
         setUser: (user: User | null) => set({ user }),
+        setAutoDemoEnabled: (enabled: boolean) => set({ autoDemoEnabled: enabled }),
       }),
       {
         name: 'auth-storage',

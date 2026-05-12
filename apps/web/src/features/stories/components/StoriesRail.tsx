@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthUser } from '@/stores/authStore';
 import { useStoryStore } from '@/stores/storyStore';
+import { useSocialStore } from '@/stores/socialStore';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import { MOCK_USERS } from '@/mocks/auth';
 import type { MediaItem, StoryWithAuthor } from '@shared-types';
@@ -21,6 +22,8 @@ interface StoriesRailProps {
 
 export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const user = useAuthUser();
+  const followingIds = useSocialStore((state) => state.followingIds);
+  const followerIds = useSocialStore((state) => state.followerIds);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageTimeoutRef = useRef<number | null>(null);
@@ -79,8 +82,15 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
   }, [stories]);
 
+  const accessibleAuthorIds = useMemo(() => {
+    if (!user) return new Set<string>();
+    return new Set([user.id, ...followingIds, ...followerIds]);
+  }, [followerIds, followingIds, user]);
+
   const orderedStories = useMemo(() => {
-    return [...stories].sort(
+    return stories
+      .filter((story) => accessibleAuthorIds.has(story.authorId))
+      .sort(
       (a, b) => {
         const timeDelta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         if (timeDelta !== 0) {
@@ -96,7 +106,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
         return a.id.localeCompare(b.id);
       }
     );
-  }, [stories, user]);
+  }, [accessibleAuthorIds, stories]);
 
   const storyGroups = useMemo(() => {
     const grouped = new Map<string, StoryWithAuthor[]>();

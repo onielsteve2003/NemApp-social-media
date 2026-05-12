@@ -1,5 +1,4 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import type { ApiResponse } from '@social-media/shared-types';
 
 export interface ApiClientConfig {
   baseURL: string;
@@ -9,6 +8,30 @@ export interface ApiClientConfig {
 
 export class ApiClient {
   private client: AxiosInstance;
+
+  private getStorage(): {
+    getItem: (key: string) => string | null;
+    setItem: (key: string, value: string) => void;
+    removeItem: (key: string) => void;
+  } | null {
+    const globalObject = globalThis as {
+      localStorage?: {
+        getItem: (key: string) => string | null;
+        setItem: (key: string, value: string) => void;
+        removeItem: (key: string) => void;
+      };
+    };
+    return globalObject.localStorage ?? null;
+  }
+
+  private reloadPage(): void {
+    const globalObject = globalThis as {
+      location?: {
+        reload?: () => void;
+      };
+    };
+    globalObject.location?.reload?.();
+  }
 
   constructor(config: ApiClientConfig) {
     this.client = axios.create({
@@ -39,7 +62,7 @@ export class ApiClient {
         if (error.response?.status === 401) {
           // Handle unauthorized - clear auth and redirect
           this.clearAuthToken();
-          window?.location?.reload?.();
+          this.reloadPage();
         }
         return Promise.reject(error.response?.data || error.message);
       }
@@ -85,34 +108,22 @@ export class ApiClient {
   }
 
   setAuthToken(token: string): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
-    }
+    this.getStorage()?.setItem('auth_token', token);
   }
 
   getAuthToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token');
-    }
-    return null;
+    return this.getStorage()?.getItem('auth_token') ?? null;
   }
 
   clearAuthToken(): void {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
+    this.getStorage()?.removeItem('auth_token');
   }
 
   setRefreshToken(token: string): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('refresh_token', token);
-    }
+    this.getStorage()?.setItem('refresh_token', token);
   }
 
   getRefreshToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('refresh_token');
-    }
-    return null;
+    return this.getStorage()?.getItem('refresh_token') ?? null;
   }
 }

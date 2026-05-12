@@ -2,9 +2,11 @@ import 'dotenv/config';
 import http from 'http';
 import app from './app';
 import { Server as SocketIOServer } from 'socket.io';
+import { env } from './config/env';
+import { connectDatabase } from './config/database';
 
-const PORT = Number(process.env.PORT) || 3001;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = env.port;
+const HOST = env.host;
 
 const server = http.createServer(app);
 
@@ -24,9 +26,17 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running at http://${HOST}:${PORT}`);
-  console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);
+async function bootstrap() {
+  await connectDatabase();
+  server.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running at http://${HOST}:${PORT}`);
+    console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);
+  });
+}
+
+void bootstrap().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });
 
 export { server, io };

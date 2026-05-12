@@ -3,8 +3,11 @@ import { persist, devtools } from 'zustand/middleware';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 
+const DEFAULT_FOLLOWER_IDS = ['user-2', 'user-4'];
+
 interface SocialState {
   followingIds: string[];
+  followerIds: string[];
   toggleFollow: (userId: string) => void;
   isFollowing: (userId: string) => boolean;
 }
@@ -14,6 +17,7 @@ export const useSocialStore = create<SocialState>()(
     persist(
       (set, get) => ({
         followingIds: [],
+        followerIds: DEFAULT_FOLLOWER_IDS,
 
         toggleFollow: (userId: string) => {
           const exists = get().followingIds.includes(userId);
@@ -37,6 +41,20 @@ export const useSocialStore = create<SocialState>()(
       }),
       {
         name: 'social-storage',
+        version: 2,
+        migrate: (persistedState) => {
+          if (!persistedState || typeof persistedState !== 'object') {
+            return persistedState;
+          }
+
+          return {
+            ...persistedState,
+            followerIds:
+              Array.isArray((persistedState as { followerIds?: string[] }).followerIds)
+                ? (persistedState as { followerIds: string[] }).followerIds
+                : DEFAULT_FOLLOWER_IDS,
+          };
+        },
       }
     ),
     { name: 'social-store' }

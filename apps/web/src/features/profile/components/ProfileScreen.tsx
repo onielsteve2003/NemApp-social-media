@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore, useAuthUser } from '@/stores/authStore';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSocialStore } from '@/stores/socialStore';
+import { useStoryStore } from '@/stores/storyStore';
 import { MOCK_USERS } from '@/mocks/auth';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import { TweetCard } from '@/features/feed/components/TweetCard';
@@ -29,10 +30,12 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const setAuthUser = useAuthStore((state) => state.setUser);
   const { feed, isLoading, fetchFeed, likedIds } = useTweetStore();
   const { followingIds, toggleFollow, isFollowing } = useSocialStore();
+  const { stories, seedStories, removeExpiredStories, markSeen } = useStoryStore();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [openModal, setOpenModal] = useState<SocialModal>(null);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editLocation, setEditLocation] = useState('');
@@ -52,6 +55,11 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
   }, [authUser, router, feed.length, fetchFeed]);
 
+  useEffect(() => {
+    seedStories();
+    removeExpiredStories();
+  }, [removeExpiredStories, seedStories]);
+
   const targetUser = useMemo(() => {
     if (!authUser) return null;
     if (!username || username.toLowerCase() === authUser.username.toLowerCase()) {
@@ -61,6 +69,19 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   }, [authUser, username]);
 
   const isOwnProfile = targetUser?.id === authUser?.id;
+
+  const targetUserStories = useMemo(() => {
+    if (!targetUser) return [];
+
+    return [...stories]
+      .filter((story) => story.authorId === targetUser.id)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [stories, targetUser]);
+
+  const activeStory =
+    activeStoryIndex !== null && activeStoryIndex >= 0 && activeStoryIndex < targetUserStories.length
+      ? targetUserStories[activeStoryIndex]
+      : null;
 
   const userPosts = useMemo(
     () => feed.filter((tweet) => tweet.authorId === targetUser?.id && !tweet.isReply),
@@ -204,6 +225,37 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     targetUser.followingCount +
     (isOwnProfile ? followingIds.length : 0);
 
+  const hasActiveStory = targetUserStories.length > 0;
+
+  const openProfileStory = () => {
+    if (!hasActiveStory) return;
+
+    const nextIndex = targetUserStories.findIndex(
+      (story) => authUser && !story.seenBy.includes(authUser.id)
+    );
+    const indexToOpen = nextIndex >= 0 ? nextIndex : targetUserStories.length - 1;
+    setActiveStoryIndex(indexToOpen);
+
+    if (authUser && targetUser.id !== authUser.id) {
+      markSeen(targetUserStories[indexToOpen].id, authUser.id);
+    }
+  };
+
+  const closeStoryViewer = () => {
+    setActiveStoryIndex(null);
+  };
+
+  const goToStoryIndex = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= targetUserStories.length) {
+      return;
+    }
+
+    setActiveStoryIndex(nextIndex);
+    if (authUser && targetUser.id !== authUser.id) {
+      markSeen(targetUserStories[nextIndex].id, authUser.id);
+    }
+  };
+
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-20 backdrop-blur-md bg-slate-950/80 border-b border-white/8 px-4 py-2.5">
@@ -237,11 +289,28 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
         <div className="px-4 pb-4">
           <div className="flex justify-between items-start -mt-14">
-            <img
-              src={targetUser.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUser.username}`}
-              alt={targetUser.displayName}
-              className="h-28 w-28 rounded-full border-4 border-slate-950 bg-slate-700"
-            />
+            {hasActiveStory ? (
+              <button
+                type="button"
+                onClick={openProfileStory}
+                className="rounded-full bg-[conic-gradient(from_210deg,_#f97316,_#ec4899,_#8b5cf6,_#0ea5e9,_#f97316)] p-[4px] transition-transform hover:scale-[1.02]"
+                aria-label={`View ${targetUser.displayName}'s story`}
+              >
+                <span className="block rounded-full bg-slate-950 p-[4px]">
+                  <img
+                    src={targetUser.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUser.username}`}
+                    alt={targetUser.displayName}
+                    className="h-28 w-28 rounded-full border-4 border-slate-950 bg-slate-700"
+                  />
+                </span>
+              </button>
+            ) : (
+              <img
+                src={targetUser.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUser.username}`}
+                alt={targetUser.displayName}
+                className="h-28 w-28 rounded-full border-4 border-slate-950 bg-slate-700"
+              />
+            )}
 
             {isOwnProfile ? (
               <button
@@ -426,6 +495,81 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           isFollowing={isFollowing}
           onClose={() => setOpenModal(null)}
         />
+      )}
+
+      {activeStory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 py-8 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={closeStoryViewer}
+            className="absolute right-5 top-5 rounded-full border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-white hover:bg-black/50"
+          >
+            Close
+          </button>
+
+          <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 shadow-[0_30px_120px_rgba(15,23,42,0.65)]">
+            <div
+              className="p-4"
+              style={{ background: activeStory.background }}
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <img
+                  src={targetUser.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUser.username}`}
+                  alt={targetUser.displayName}
+                  className="h-12 w-12 rounded-full border-2 border-white/70 object-cover"
+                />
+                <div>
+                  <div className="text-sm font-semibold text-white">{targetUser.displayName}</div>
+                  <div className="text-xs text-white/80">@{targetUser.username}</div>
+                </div>
+              </div>
+
+              {activeStory.media?.type === 'image' ? (
+                <img
+                  src={activeStory.media.url}
+                  alt={activeStory.media.alt ?? activeStory.caption}
+                  className="h-[26rem] w-full rounded-[1.5rem] object-cover"
+                />
+              ) : activeStory.media?.type === 'video' ? (
+                <video
+                  src={activeStory.media.url}
+                  controls
+                  autoPlay
+                  className="h-[26rem] w-full rounded-[1.5rem] object-cover"
+                />
+              ) : (
+                <div className="flex h-[26rem] items-end rounded-[1.5rem] bg-black/10 p-6">
+                  <p className="text-lg font-semibold leading-8 text-white">{activeStory.caption}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/8 px-4 py-4 text-sm text-slate-300">
+              <button
+                type="button"
+                onClick={() => goToStoryIndex((activeStoryIndex ?? 0) - 1)}
+                disabled={(activeStoryIndex ?? 0) === 0}
+                className="rounded-full border border-white/10 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <div className="text-center">
+                <div className="font-semibold text-white">{activeStory.caption || 'Story update'}</div>
+                <div className="text-xs text-slate-400">
+                  {new Date(activeStory.createdAt).toLocaleString()}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => goToStoryIndex((activeStoryIndex ?? 0) + 1)}
+                disabled={(activeStoryIndex ?? 0) >= targetUserStories.length - 1}
+                className="rounded-full border border-white/10 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {isEditProfileOpen && (

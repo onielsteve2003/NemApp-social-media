@@ -15,7 +15,7 @@ interface FormData {
 
 export function LoginForm() {
   const router = useRouter();
-  const { login, isLoading, error } = useAuthStore();
+  const { login, isLoading, error, clearError } = useAuthStore();
   const { addToast } = useToast();
   const [formData, setFormData] = useState<FormData>({
     email: '',
@@ -24,9 +24,24 @@ export function LoginForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
 
+  React.useEffect(() => {
+    if (!error) return;
+
+    const timer = window.setTimeout(() => {
+      clearError();
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [error, clearError]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (error) {
+      clearError();
+    }
     // Clear error for this field when user starts typing
     if (errors[name]) {
       setErrors((prev) => {
@@ -39,6 +54,9 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (error) {
+      clearError();
+    }
 
     // Validate
     const validationErrors = validateLoginForm(
@@ -62,6 +80,9 @@ export function LoginForm() {
   };
 
   const handleDemoLogin = async () => {
+    if (error) {
+      clearError();
+    }
     try {
       await login(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password);
       addToast('Demo login successful!', 'success');

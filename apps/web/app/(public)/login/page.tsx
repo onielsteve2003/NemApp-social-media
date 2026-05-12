@@ -3,13 +3,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useIsAuthenticated } from '@/stores/authStore';
+import { useAuthStore, useIsAuthenticated } from '@/stores/authStore';
 import { LoginForm } from '@/features/auth/components/LoginForm';
 import { NemAppLogo } from '@/components/common/NemAppLogo';
+import { useToast } from '@/components/common/Toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const isAuthenticated = useIsAuthenticated();
+  const login = useAuthStore((state) => state.login);
+  const clearError = useAuthStore((state) => state.clearError);
+  const { addToast } = useToast();
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -66,6 +70,21 @@ export default function LoginPage() {
 
             <div className="mt-8 rounded-[1.75rem] border border-white/8 bg-black/20 p-5 sm:p-6">
               <LoginForm />
+              <button
+                onClick={async () => {
+                  clearError();
+                  try {
+                    await login('demo@example.com', 'Demo@1234');
+                  } catch (error) {
+                    const message =
+                      error instanceof Error ? error.message : 'Demo login failed. Please try again.';
+                    addToast(message, 'error');
+                  }
+                }}
+                className="mt-4 w-full rounded-full border border-sky-300/40 bg-sky-500/20 px-4 py-2.5 text-sm font-bold text-sky-100 hover:bg-sky-500/30"
+              >
+                Enter Demo Instantly
+              </button>
             </div>
 
             <div className="mt-6 space-y-4 text-center">
