@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthUser } from '@/stores/authStore';
 import { useStoryStore } from '@/stores/storyStore';
-import { useSocialStore } from '@/stores/socialStore';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import { MOCK_USERS } from '@/mocks/auth';
 import type { MediaItem, StoryWithAuthor } from '@shared-types';
@@ -22,8 +21,6 @@ interface StoriesRailProps {
 
 export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const user = useAuthUser();
-  const followingIds = useSocialStore((state) => state.followingIds);
-  const followerIds = useSocialStore((state) => state.followerIds);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageTimeoutRef = useRef<number | null>(null);
@@ -57,7 +54,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
   const wasPausedBeforeAudienceModalRef = useRef(false);
 
   useEffect(() => {
-    seedStories();
+    void seedStories();
     removeExpiredStories();
   }, [seedStories, removeExpiredStories]);
 
@@ -82,15 +79,8 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     }
   }, [stories]);
 
-  const accessibleAuthorIds = useMemo(() => {
-    if (!user) return new Set<string>();
-    return new Set([user.id, ...followingIds, ...followerIds]);
-  }, [followerIds, followingIds, user]);
-
   const orderedStories = useMemo(() => {
-    return stories
-      .filter((story) => accessibleAuthorIds.has(story.authorId))
-      .sort(
+    return [...stories].sort(
       (a, b) => {
         const timeDelta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         if (timeDelta !== 0) {
@@ -106,7 +96,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
         return a.id.localeCompare(b.id);
       }
     );
-  }, [accessibleAuthorIds, stories]);
+  }, [stories]);
 
   const storyGroups = useMemo(() => {
     const grouped = new Map<string, StoryWithAuthor[]>();
@@ -180,6 +170,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
       .filter((profile): profile is StoryWithAuthor['author'] => Boolean(profile));
   }, [activeStory, userLookup]);
   const isStoryLikedByMe = Boolean(user && activeStory?.likedBy.includes(user.id));
+  const isActiveStoryOwner = Boolean(user && activeStory && activeStory.authorId === user.id);
 
   const clearImageTimer = () => {
     if (imageTimeoutRef.current !== null) {
@@ -225,7 +216,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
 
     setActiveStoryId(story.id);
     if (user && story.authorId !== user.id) {
-      markSeen(story.id, user.id);
+      void markSeen(story.id, user.id);
     }
   };
 
@@ -271,9 +262,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     goToStory(firstUnseen ?? group[0] ?? story);
   };
 
-  const handleCreateStory = () => {
+  const handleCreateStory = async () => {
     if (!user) return;
-    const newStoryId = createStory(user.id, caption.trim(), background, selectedMedia);
+    const newStoryId = await createStory(user.id, caption.trim(), background, selectedMedia);
     if (!newStoryId) return;
     setCaption('');
     setSelectedMedia(undefined);
@@ -303,7 +294,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     const fallbackPreviousGroup = storyGroups[activeGroupIndex - 1]?.[0] ?? null;
     const nextStoryToOpen = nextStoryInGroup ?? previousStoryInGroup ?? fallbackNextGroup ?? fallbackPreviousGroup;
 
-    deleteStory(activeStory.id, user.id);
+    void deleteStory(activeStory.id, user.id);
     setActionMessage('Story deleted successfully');
     window.setTimeout(() => setActionMessage(''), 2200);
     if (nextStoryToOpen && nextStoryToOpen.id !== activeStory.id) {
@@ -314,20 +305,21 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
     closeViewer();
   };
 
-  const handleToggleLike = () => {
+  const handleToggleLike = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (!activeStory || !user) {
       return;
     }
 
-    toggleLike(activeStory.id, user.id);
+    void toggleLike(activeStory.id, user.id);
   };
 
-  const handleReshareStory = () => {
+  const handleReshareStory = async () => {
     if (!activeStory || !user) {
       return;
     }
 
-    const newStoryId = reshareStory(activeStory.id, user.id);
+    const newStoryId = await reshareStory(activeStory.id, user.id);
     if (!newStoryId) {
       setActionMessage('Unable to reshare this story');
       window.setTimeout(() => setActionMessage(''), 2200);
@@ -728,7 +720,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                 </div>
 
                 <button
-                  onClick={handleCreateStory}
+                  onClick={() => {
+                    void handleCreateStory();
+                  }}
                   className="w-full rounded-full bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-sky-300"
                 >
                   Publish story
@@ -763,12 +757,12 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
             </div>
             <button
               onClick={goToPreviousStory}
-              className="absolute bottom-0 left-0 top-24 z-20 w-1/3"
+              className="absolute bottom-36 left-0 top-24 z-20 w-1/3"
               aria-label="Previous story"
             />
             <button
               onClick={goToNextStory}
-              className="absolute bottom-0 right-0 top-24 z-20 w-1/3"
+              className="absolute bottom-36 right-0 top-24 z-20 w-1/3"
               aria-label="Next story"
             />
             <div className="relative min-h-[620px]" style={{ background: activeStory.background }}>
@@ -849,7 +843,9 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   )}
                   {user && activeStory.authorId !== user.id && (
                     <button
-                      onClick={handleReshareStory}
+                      onClick={() => {
+                        void handleReshareStory();
+                      }}
                       className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
                       aria-label="Reshare story"
                     >
@@ -899,19 +895,25 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
                   <div className="mt-3 flex items-center gap-3 text-sm text-white/80">
                     <button
                       onClick={handleToggleLike}
-                      className={`rounded-full px-3 py-1.5 font-semibold transition-colors ${isStoryLikedByMe ? 'bg-pink-500/30 text-pink-100' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+                      className={`inline-flex items-center rounded-full px-3 py-1.5 transition-colors ${isStoryLikedByMe ? 'bg-pink-500/30 text-pink-100' : 'bg-white/10 text-white/90 hover:bg-white/20'}`}
+                      aria-label={isStoryLikedByMe ? 'Unlike story' : 'Like story'}
                     >
-                      {isStoryLikedByMe ? 'Liked' : 'Like'} ({activeStory.likedBy.length})
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill={isStoryLikedByMe ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L4.22 13.45 12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                      {isActiveStoryOwner && <span className="ml-2 text-sm font-semibold">{activeStory.likedBy.length}</span>}
                     </button>
-                    <button
-                      onClick={() => {
-                        pauseForAudienceModal();
-                        setIsAudienceModalOpen(true);
-                      }}
-                      className="rounded-full bg-white/10 px-3 py-1.5 font-semibold text-white/90 hover:bg-white/20"
-                    >
-                      {activeStory.viewersCount} viewers
-                    </button>
+                    {isActiveStoryOwner && (
+                      <button
+                        onClick={() => {
+                          pauseForAudienceModal();
+                          setIsAudienceModalOpen(true);
+                        }}
+                        className="rounded-full bg-white/10 px-3 py-1.5 font-semibold text-white/90 hover:bg-white/20"
+                      >
+                        {activeStory.viewersCount} viewers
+                      </button>
+                    )}
                     <p>
                       Story {activeStoryIndex + 1} of {activeGroup?.length ?? 1}
                     </p>
@@ -923,7 +925,7 @@ export function StoriesRail({ expanded = false }: StoriesRailProps) {
         </div>
       )}
 
-      {activeStory && isAudienceModalOpen && (
+      {activeStory && isActiveStoryOwner && isAudienceModalOpen && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
           onClick={() => {
