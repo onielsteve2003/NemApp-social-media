@@ -4,6 +4,7 @@ import app from './app';
 import { Server as SocketIOServer } from 'socket.io';
 import { env } from './config/env';
 import { connectDatabase } from './config/database';
+import { ensureSeedData } from './services/bootstrapService';
 
 const PORT = env.port;
 const HOST = env.host;
@@ -28,6 +29,7 @@ io.on('connection', (socket) => {
 
 async function bootstrap() {
   await connectDatabase();
+  await ensureSeedData();
   server.listen(PORT, HOST, () => {
     console.log(`🚀 Server running at http://${HOST}:${PORT}`);
     console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);

@@ -64,9 +64,9 @@ export default function TweetDetailPage({
     return feed.find((item) => item.id === replyToId) ?? tweet;
   }, [replyToId, feed, tweet]);
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (!user || !tweet || !canReply) return;
-    createReply(tweet.id, reply.trim(), user.id, replyTarget?.id);
+    await createReply(tweet.id, reply.trim(), user.id, replyTarget?.id);
     setReply('');
     setReplyToId(null);
   };
@@ -167,7 +167,9 @@ export default function TweetDetailPage({
                 {reply.length}/280
               </p>
               <button
-                onClick={handleReply}
+                onClick={() => {
+                  void handleReply();
+                }}
                 disabled={!canReply}
                 className="rounded-full bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-sky-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

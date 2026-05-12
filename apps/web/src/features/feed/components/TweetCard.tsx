@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/authStore';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
@@ -57,8 +58,9 @@ export function TweetCard({
   const [isShareCopied, setIsShareCopied] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const toggleBlockedUser = useSettingsStore((state) => state.toggleBlockedUser);
-  const { toggleLike, toggleRetweet, toggleBookmark, votePollOption, likedIds, retweetedIds, bookmarkedIds } =
+  const { toggleLike, toggleRetweet, toggleBookmark, votePollOption, editTweet, deleteTweet, likedIds, retweetedIds, bookmarkedIds } =
     useTweetStore();
   const authorHref = `/profile/${tweet.author.username}`;
   const tweetHref = `/post/${tweet.id}`;
@@ -188,15 +190,45 @@ export function TweetCard({
                 >
                   Copy post link
                 </button>
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    toggleBlockedUser(tweet.authorId);
-                  }}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
-                >
-                  Hide posts from @{tweet.author.username}
-                </button>
+                {currentUserId === tweet.authorId && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        const nextContent = window.prompt('Edit post', tweet.content)?.trim();
+                        if (!nextContent || nextContent === tweet.content) return;
+                        await editTweet(tweet.id, nextContent);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-white hover:bg-white/10"
+                    >
+                      Edit post
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        if (!window.confirm('Delete this post?')) return;
+                        await deleteTweet(tweet.id);
+                        if (!disableNavigation) {
+                          router.push('/home');
+                        }
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+                    >
+                      Delete post
+                    </button>
+                  </>
+                )}
+                {currentUserId !== tweet.authorId && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      toggleBlockedUser(tweet.authorId);
+                    }}
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+                  >
+                    Hide posts from @{tweet.author.username}
+                  </button>
+                )}
               </div>
             )}
           </div>

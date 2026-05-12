@@ -175,7 +175,7 @@ export function TweetComposer() {
     setPollOptions(updated);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canPost) return;
 
     // Create poll if enabled
@@ -195,7 +195,7 @@ export function TweetComposer() {
       };
     }
 
-    createTweet(
+    await createTweet(
       content.trim(),
       user.id,
       mediaAttachments.length > 0 ? mediaAttachments : undefined,
@@ -210,7 +210,7 @@ export function TweetComposer() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleSubmit();
+      void handleSubmit();
     }
   };
 
@@ -513,7 +513,9 @@ export function TweetComposer() {
               )}
 
               <button
-                onClick={handleSubmit}
+                onClick={() => {
+                  void handleSubmit();
+                }}
                 disabled={!canPost}
                 className="rounded-full bg-sky-400 text-slate-950 font-bold px-5 py-2 text-[15px] hover:bg-sky-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >

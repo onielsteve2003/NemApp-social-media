@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuthUser } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSocialStore } from '@/stores/socialStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 function timeAgo(date: Date): string {
@@ -43,6 +44,7 @@ export default function NotificationsPage() {
     markAllAsRead,
     clearAll,
   } = useNotificationStore();
+  const { isFollowing, toggleFollow } = useSocialStore();
   const blockedUserIds = useSettingsStore((state) => state.blockedUserIds);
 
   useEffect(() => {
@@ -134,6 +136,18 @@ export default function NotificationsPage() {
                     >
                       View profile
                     </Link>
+                    {item.type === 'follow' && (
+                      <button
+                        onClick={() => {
+                          void toggleFollow(item.actor.id);
+                        }}
+                        className={`text-xs font-semibold hover:underline ${
+                          isFollowing(item.actor.id) ? 'text-slate-400' : 'text-sky-400'
+                        }`}
+                      >
+                        {isFollowing(item.actor.id) ? 'Following' : 'Follow back'}
+                      </button>
+                    )}
                     {!item.isRead && (
                       <button
                         onClick={() => markAsRead(item.id)}

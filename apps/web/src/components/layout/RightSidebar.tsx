@@ -1,9 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSocialStore } from '@/stores/socialStore';
+import { apiClient } from '@/lib/apiClient';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
+import type { UserProfile } from '@shared-types';
 
 const TRENDING = [
   { topic: '#buildinpublic', posts: '24.1K' },
@@ -13,36 +15,46 @@ const TRENDING = [
   { topic: '#opensource', posts: '9.8K' },
 ];
 
-const WHO_TO_FOLLOW = [
-  {
-    id: 'user-5',
-    displayName: 'Vercel',
-    username: 'vercel',
-    avatar: 'https://api.dicebear.com/7.x/identicon/svg?seed=vercel',
-    isVerified: true,
-  },
-  {
-    id: 'user-6',
-    displayName: 'Lee Robinson',
-    username: 'leeerob',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=leeerob',
-    isVerified: false,
-  },
-  {
-    id: 'user-7',
-    displayName: 'shadcn',
-    username: 'shadcn',
-    avatar: 'https://api.dicebear.com/7.x/identicon/svg?seed=shadcn',
-    isVerified: false,
-  },
-];
+interface DiscoverResponse {
+  success: boolean;
+  data: {
+    users: UserProfile[];
+  };
+}
 
 export function RightSidebar() {
   const router = useRouter();
   const followingIds = useSocialStore((state) => state.followingIds);
   const toggleFollow = useSocialStore((state) => state.toggleFollow);
+  const hydrateProfiles = useSocialStore((state) => state.hydrateProfiles);
   const [searchQuery, setSearchQuery] = useState('');
-  const suggestedPeople = WHO_TO_FOLLOW.filter((person) => !followingIds.includes(person.id));
+  const [discoverUsers, setDiscoverUsers] = useState<UserProfile[]>([]);
+  const suggestedPeople = discoverUsers.filter((person) => !followingIds.includes(person.id));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDiscoverUsers = async () => {
+      try {
+        const response = await apiClient.get<DiscoverResponse>('/api/users/discover');
+        if (!cancelled) {
+          const users = response.data.users ?? [];
+          hydrateProfiles(users);
+          setDiscoverUsers(users);
+        }
+      } catch {
+        if (!cancelled) {
+          setDiscoverUsers([]);
+        }
+      }
+    };
+
+    void loadDiscoverUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateProfiles]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

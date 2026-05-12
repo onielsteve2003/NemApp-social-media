@@ -1,10 +1,34 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { TweetWithAuthor, MediaItem, Poll } from '@shared-types';
-import { getMockFeedPage, FEED_PAGE_SIZE, MOCK_TWEETS } from '@/mocks/tweets';
-import { MOCK_USERS } from '@/mocks/auth';
-import { useAuthStore } from '@/stores/authStore';
-import { useNotificationStore } from '@/stores/notificationStore';
+import type { MediaItem, Poll, TweetWithAuthor } from '@shared-types';
+import { apiClient } from '@/lib/apiClient';
+
+const FEED_PAGE_SIZE = 20;
+
+interface FeedResponse {
+  success: boolean;
+  data: {
+    tweets: TweetWithAuthor[];
+    likedIds: string[];
+    retweetedIds: string[];
+    bookmarkedIds: string[];
+    hasMore: boolean;
+  };
+}
+
+interface TweetMutationResponse {
+  success: boolean;
+  data: {
+    tweet?: TweetWithAuthor;
+    likesCount?: number;
+    likedIds?: string[];
+    retweetsCount?: number;
+    retweetedIds?: string[];
+    bookmarksCount?: number;
+    bookmarkedIds?: string[];
+    poll?: Poll;
+  };
+}
 
 interface TweetState {
   feed: TweetWithAuthor[];
@@ -15,87 +39,26 @@ interface TweetState {
   likedIds: Set<string>;
   retweetedIds: Set<string>;
   bookmarkedIds: Set<string>;
-
-  // Actions
   fetchFeed: () => Promise<void>;
   fetchMore: () => Promise<void>;
-  createTweet: (content: string, authorId: string, media?: MediaItem[], poll?: Poll) => void;
+  createTweet: (content: string, authorId: string, media?: MediaItem[], poll?: Poll) => Promise<void>;
+  editTweet: (tweetId: string, content: string) => Promise<TweetWithAuthor | null>;
+  deleteTweet: (tweetId: string) => Promise<void>;
   createReply: (
     tweetId: string,
     content: string,
     authorId: string,
     replyToId?: string,
     media?: MediaItem[]
-  ) => void;
-  toggleLike: (tweetId: string) => void;
-  toggleRetweet: (tweetId: string) => void;
-  toggleBookmark: (tweetId: string) => void;
-  votePollOption: (tweetId: string, optionId: string) => void;
+  ) => Promise<void>;
+  toggleLike: (tweetId: string) => Promise<void>;
+  toggleRetweet: (tweetId: string) => Promise<void>;
+  toggleBookmark: (tweetId: string) => Promise<void>;
+  votePollOption: (tweetId: string, optionId: string) => Promise<void>;
 }
 
-// Sets are not serializable so we keep them outside the store as module-level state
-// and re-expose them via the store interface (no persist needed for interaction state)
-const likedIds = new Set<string>();
-const retweetedIds = new Set<string>();
-const bookmarkedIds = new Set<string>();
-const pollVotesByUser = new Set<string>();
-
-let tweetIdCounter = MOCK_TWEETS.length + 1;
-
-const GENERATED_POSTS = [
-  'Quietly shipping beats loudly planning. Small steps every day compound faster than motivation.',
-  'If your UI feels "off", check spacing rhythm before changing colors. Structure first, decoration second.',
-  'Most bugs are communication bugs: unclear assumptions between components, teams, or layers.',
-  'A productive day is often one hard decision plus many tiny boring ones done consistently.',
-  'Docs are part of the product. If users need a tutorial to do a basic task, the UX needs another pass.',
-  'Performance is a feature. People do not notice what loads fast, but they always notice what feels slow.',
-  'A clean codebase is less about perfection and more about making future changes feel safe.',
-  'Design systems are not creativity killers. They remove repetitive choices so you can focus on meaningful ones.',
-];
-
-function toAuthorProfile(user: (typeof MOCK_USERS)[number]) {
-  return {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    bio: user.bio,
-    avatar: user.avatar,
-    coverImage: user.coverImage,
-    location: user.location,
-    website: user.website,
-    isPrivate: user.isPrivate,
-    isVerified: user.isVerified,
-    role: user.role,
-    followersCount: user.followersCount,
-    followingCount: user.followingCount,
-    tweetsCount: user.tweetsCount,
-    likesCount: user.likesCount,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-}
-
-function generateMockPage(page: number, size: number): TweetWithAuthor[] {
-  const now = Date.now();
-  return Array.from({ length: size }).map((_, index) => {
-    const user = MOCK_USERS[(page + index) % MOCK_USERS.length];
-    const content = GENERATED_POSTS[(page * size + index) % GENERATED_POSTS.length];
-    const createdAt = new Date(now - (page * size + index + 1) * 1000 * 60 * 37);
-    return {
-      id: `tweet-generated-${page}-${index}-${tweetIdCounter++}`,
-      authorId: user.id,
-      content,
-      likesCount: 12 + ((page + index) % 240),
-      repliesCount: 2 + ((page + index) % 48),
-      retweetsCount: 1 + ((page + index) % 77),
-      bookmarksCount: 1 + ((page + index) % 53),
-      mentions: [],
-      hashtags: [],
-      createdAt,
-      updatedAt: createdAt,
-      author: toAuthorProfile(user),
-    };
-  });
+function updateSet(values?: string[]) {
+  return new Set(values ?? []);
 }
 
 export const useTweetStore = create<TweetState>()(
@@ -106,19 +69,20 @@ export const useTweetStore = create<TweetState>()(
       isFetchingMore: false,
       hasMore: true,
       page: 0,
-      likedIds,
-      retweetedIds,
-      bookmarkedIds,
+      likedIds: new Set<string>(),
+      retweetedIds: new Set<string>(),
+      bookmarkedIds: new Set<string>(),
 
       fetchFeed: async () => {
         set({ isLoading: true });
-        // Simulate network latency
-        await new Promise((r) => setTimeout(r, 600));
-        const tweets = getMockFeedPage(0);
+        const response = await apiClient.get<FeedResponse>(`/api/tweets/feed?page=0&limit=${FEED_PAGE_SIZE}`);
         set({
-          feed: tweets,
+          feed: response.data.tweets ?? [],
           page: 1,
-          hasMore: true,
+          hasMore: response.data.hasMore ?? false,
+          likedIds: updateSet(response.data.likedIds),
+          retweetedIds: updateSet(response.data.retweetedIds),
+          bookmarkedIds: updateSet(response.data.bookmarkedIds),
           isLoading: false,
         });
       },
@@ -126,176 +90,119 @@ export const useTweetStore = create<TweetState>()(
       fetchMore: async () => {
         const { page, isFetchingMore, hasMore } = get();
         if (isFetchingMore || !hasMore) return;
+
         set({ isFetchingMore: true });
-        await new Promise((r) => setTimeout(r, 500));
-        const seededTweets = getMockFeedPage(page);
-        const tweets =
-          seededTweets.length > 0
-            ? seededTweets
-            : generateMockPage(page, FEED_PAGE_SIZE);
-        set((s) => ({
-          feed: [...s.feed, ...tweets],
-          page: s.page + 1,
-          hasMore: true,
+        const response = await apiClient.get<FeedResponse>(`/api/tweets/feed?page=${page}&limit=${FEED_PAGE_SIZE}`);
+        set((state) => ({
+          feed: [...state.feed, ...(response.data.tweets ?? [])],
+          page: state.page + 1,
+          hasMore: response.data.hasMore ?? false,
+          likedIds: updateSet(response.data.likedIds),
+          retweetedIds: updateSet(response.data.retweetedIds),
+          bookmarkedIds: updateSet(response.data.bookmarkedIds),
           isFetchingMore: false,
         }));
       },
 
-      createTweet: (content, authorId, media, poll) => {
-        // Resolve author either from the current feed or user mocks.
-        const authorTweet = get().feed.find((t) => t.authorId === authorId);
-        const fallbackAuthor = MOCK_USERS.find((u) => u.id === authorId);
-        const author = authorTweet?.author ?? (fallbackAuthor ? toAuthorProfile(fallbackAuthor) : null);
-        if (!author) return;
-        const newTweet: TweetWithAuthor = {
-          id: `tweet-new-${tweetIdCounter++}`,
-          authorId,
+      createTweet: async (content, _authorId, media, poll) => {
+        const response = await apiClient.post<TweetMutationResponse>('/api/tweets', {
           content,
-          media: media && media.length > 0 ? media : undefined,
-          poll: poll,
-          likesCount: 0,
-          repliesCount: 0,
-          retweetsCount: 0,
-          bookmarksCount: 0,
-          mentions: [],
-          hashtags: content.match(/#(\w+)/g)?.map((h) => h.slice(1)) ?? [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          author,
-        };
-        set((s) => ({ feed: [newTweet, ...s.feed] }));
+          media,
+          poll,
+        });
+        if (!response.data.tweet) return;
+
+        set((state) => ({
+          feed: [response.data.tweet!, ...state.feed],
+        }));
       },
 
-      createReply: (tweetId, content, authorId, replyToId, media) => {
-        const authorTweet = get().feed.find((t) => t.authorId === authorId);
-        const fallbackAuthor = MOCK_USERS.find((u) => u.id === authorId);
-        const author = authorTweet?.author ?? (fallbackAuthor ? toAuthorProfile(fallbackAuthor) : null);
-        if (!author) return;
+      editTweet: async (tweetId, content) => {
+        const response = await apiClient.patch<TweetMutationResponse>(`/api/tweets/${tweetId}`, {
+          content,
+        });
+        if (!response.data.tweet) return null;
 
+        set((state) => ({
+          feed: state.feed.map((tweet) =>
+            tweet.id === tweetId ? response.data.tweet! : tweet
+          ),
+        }));
+
+        return response.data.tweet;
+      },
+
+      deleteTweet: async (tweetId) => {
+        await apiClient.delete(`/api/tweets/${tweetId}`);
+        set((state) => ({
+          feed: state.feed.filter((tweet) => tweet.id !== tweetId && tweet.replyTo !== tweetId),
+        }));
+      },
+
+      createReply: async (tweetId, content, _authorId, replyToId, media) => {
         const parentId = replyToId ?? tweetId;
-
-        const reply: TweetWithAuthor = {
-          id: `tweet-reply-${tweetIdCounter++}`,
-          authorId,
+        const response = await apiClient.post<TweetMutationResponse>(`/api/tweets/${tweetId}/replies`, {
           content,
-          media: media && media.length > 0 ? media : undefined,
-          likesCount: 0,
-          repliesCount: 0,
-          retweetsCount: 0,
-          bookmarksCount: 0,
-          isReply: true,
-          replyTo: parentId,
-          mentions: [],
-          hashtags: content.match(/#(\w+)/g)?.map((h) => h.slice(1)) ?? [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          author,
-        };
+          media,
+        });
+        if (!response.data.tweet) return;
 
-        set((s) => ({
-          feed: [reply, ...s.feed].map((t) =>
-            t.id === parentId
-              ? { ...t, repliesCount: t.repliesCount + 1 }
-              : t
-          ),
-        }));
-
-        const currentUser = useAuthStore.getState().user;
-        if (!currentUser) return;
-
-        const mentions = content.match(/@(\w+)/g) ?? [];
-        for (const mention of mentions) {
-          const username = mention.slice(1).toLowerCase();
-          const mentionedUser = MOCK_USERS.find(
-            (user) => user.username.toLowerCase() === username
-          );
-          if (!mentionedUser) continue;
-          useNotificationStore
-            .getState()
-            .addNotification(currentUser.id, mentionedUser.id, 'mention', tweetId);
-        }
-      },
-
-      toggleLike: (tweetId) => {
-        const isLiked = likedIds.has(tweetId);
-        if (isLiked) {
-          likedIds.delete(tweetId);
-        } else {
-          likedIds.add(tweetId);
-        }
-        set((s) => ({
-          likedIds: new Set(likedIds),
-          feed: s.feed.map((t) =>
-            t.id === tweetId
-              ? { ...t, likesCount: t.likesCount + (isLiked ? -1 : 1) }
-              : t
+        set((state) => ({
+          feed: [response.data.tweet!, ...state.feed].map((tweet) =>
+            tweet.id === parentId
+              ? { ...tweet, repliesCount: tweet.repliesCount + 1 }
+              : tweet
           ),
         }));
       },
 
-      toggleRetweet: (tweetId) => {
-        const isRetweeted = retweetedIds.has(tweetId);
-        if (isRetweeted) {
-          retweetedIds.delete(tweetId);
-        } else {
-          retweetedIds.add(tweetId);
-        }
-        set((s) => ({
-          retweetedIds: new Set(retweetedIds),
-          feed: s.feed.map((t) =>
-            t.id === tweetId
-              ? { ...t, retweetsCount: t.retweetsCount + (isRetweeted ? -1 : 1) }
-              : t
+      toggleLike: async (tweetId) => {
+        const response = await apiClient.post<TweetMutationResponse>(`/api/tweets/${tweetId}/like`);
+        set((state) => ({
+          feed: state.feed.map((tweet) =>
+            tweet.id === tweetId
+              ? { ...tweet, likesCount: response.data.likesCount ?? tweet.likesCount }
+              : tweet
           ),
+          likedIds: updateSet(response.data.likedIds),
         }));
       },
 
-      toggleBookmark: (tweetId) => {
-        const isBookmarked = bookmarkedIds.has(tweetId);
-        if (isBookmarked) {
-          bookmarkedIds.delete(tweetId);
-        } else {
-          bookmarkedIds.add(tweetId);
-        }
-        set((s) => ({
-          bookmarkedIds: new Set(bookmarkedIds),
-          feed: s.feed.map((t) =>
-            t.id === tweetId
-              ? { ...t, bookmarksCount: t.bookmarksCount + (isBookmarked ? -1 : 1) }
-              : t
+      toggleRetweet: async (tweetId) => {
+        const response = await apiClient.post<TweetMutationResponse>(`/api/tweets/${tweetId}/retweet`);
+        set((state) => ({
+          feed: state.feed.map((tweet) =>
+            tweet.id === tweetId
+              ? { ...tweet, retweetsCount: response.data.retweetsCount ?? tweet.retweetsCount }
+              : tweet
           ),
+          retweetedIds: updateSet(response.data.retweetedIds),
         }));
       },
 
-      votePollOption: (tweetId, optionId) => {
-        const currentUser = useAuthStore.getState().user;
-        if (!currentUser) return;
-
-        const voteKey = `${currentUser.id}:${tweetId}`;
-        if (pollVotesByUser.has(voteKey)) return;
-
-        set((s) => ({
-          feed: s.feed.map((t) => {
-            if (t.id !== tweetId || !t.poll) return t;
-
-            const updatedOptions = t.poll.options.map((option) =>
-              option.id === optionId
-                ? { ...option, votes: option.votes + 1 }
-                : option
-            );
-
-            return {
-              ...t,
-              poll: {
-                ...t.poll,
-                options: updatedOptions,
-                totalVotes: t.poll.totalVotes + 1,
-              },
-            };
-          }),
+      toggleBookmark: async (tweetId) => {
+        const response = await apiClient.post<TweetMutationResponse>(`/api/tweets/${tweetId}/bookmark`);
+        set((state) => ({
+          feed: state.feed.map((tweet) =>
+            tweet.id === tweetId
+              ? { ...tweet, bookmarksCount: response.data.bookmarksCount ?? tweet.bookmarksCount }
+              : tweet
+          ),
+          bookmarkedIds: updateSet(response.data.bookmarkedIds),
         }));
+      },
 
-        pollVotesByUser.add(voteKey);
+      votePollOption: async (tweetId, optionId) => {
+        const response = await apiClient.post<TweetMutationResponse>(`/api/tweets/${tweetId}/poll-vote`, { optionId });
+        if (!response.data.poll) return;
+
+        set((state) => ({
+          feed: state.feed.map((tweet) =>
+            tweet.id === tweetId
+              ? { ...tweet, poll: response.data.poll }
+              : tweet
+          ),
+        }));
       },
     }),
     { name: 'tweet-store' }

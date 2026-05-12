@@ -42,13 +42,15 @@ function issueTokens(user: User) {
 
 function createUserFromRegister(input: RegisterInput): User {
   const now = new Date();
+  const normalizedUsername = input.username.trim().toLowerCase();
+  const normalizedEmail = input.email.trim().toLowerCase();
   return {
     id: `user-${Date.now()}`,
-    username: input.username,
-    email: input.email,
+    username: normalizedUsername,
+    email: normalizedEmail,
     displayName: input.displayName,
     bio: 'Built with NemApp.',
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${input.username}`,
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedUsername}`,
     coverImage: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=200&fit=crop',
     location: 'Everywhere',
     website: 'https://example.com',

@@ -1,254 +1,114 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools } from 'zustand/middleware';
 import type { MediaItem, StoryWithAuthor } from '@shared-types';
-import { MOCK_USERS } from '@/mocks/auth';
-import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/lib/apiClient';
+
+interface StoryResponse {
+  success: boolean;
+  data: {
+    stories?: StoryWithAuthor[];
+    story?: StoryWithAuthor;
+    likedBy?: string[];
+  };
+}
 
 interface StoryState {
   stories: StoryWithAuthor[];
   initialized: boolean;
-  seedStories: () => void;
+  seedStories: () => Promise<void>;
   createStory: (
     authorId: string,
     caption: string,
     background: string,
     media?: MediaItem
-  ) => string;
-  markSeen: (storyId: string, viewerId: string) => void;
-  toggleLike: (storyId: string, userId: string) => void;
-  deleteStory: (storyId: string, requesterId: string) => void;
-  reshareStory: (storyId: string, resharedById: string) => string;
+  ) => Promise<string>;
+  markSeen: (storyId: string, viewerId: string) => Promise<void>;
+  toggleLike: (storyId: string, userId: string) => Promise<void>;
+  deleteStory: (storyId: string, requesterId: string) => Promise<void>;
+  reshareStory: (storyId: string, resharedById: string) => Promise<string>;
   removeExpiredStories: () => void;
-}
-
-const STORY_BACKGROUNDS = [
-  'linear-gradient(135deg, #0ea5e9 0%, #1d4ed8 100%)',
-  'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-  'linear-gradient(135deg, #14b8a6 0%, #0f766e 100%)',
-  'linear-gradient(135deg, #ec4899 0%, #7c3aed 100%)',
-  'linear-gradient(135deg, #facc15 0%, #f97316 100%)',
-];
-
-let storyIdCounter = 1;
-
-function toAuthorProfile(user: (typeof MOCK_USERS)[number]) {
-  return {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    bio: user.bio,
-    avatar: user.avatar,
-    coverImage: user.coverImage,
-    location: user.location,
-    website: user.website,
-    isPrivate: user.isPrivate,
-    isVerified: user.isVerified,
-    role: user.role,
-    followersCount: user.followersCount,
-    followingCount: user.followingCount,
-    tweetsCount: user.tweetsCount,
-    likesCount: user.likesCount,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-}
-
-function makeSeedStories(): StoryWithAuthor[] {
-  const now = Date.now();
-
-  // skip user-1 (demo user) — they create their own stories at runtime
-  const seedUsers = MOCK_USERS.filter((u) => u.id !== 'user-1').slice(0, 6);
-
-  return seedUsers.flatMap((user, userIndex) => {
-    const storyCount = 1 + Math.floor(Math.random() * 3);
-
-    return Array.from({ length: storyCount }).map((_, storyIndex) => ({
-      id: `story-${storyIdCounter++}`,
-      authorId: user.id,
-      caption:
-        storyIndex === 0
-          ? userIndex % 2 === 0
-            ? 'Shipping, sketching, and collecting ideas.'
-            : 'Another day, another update.'
-          : 'One more angle before this moment disappears.',
-      background: STORY_BACKGROUNDS[(userIndex + storyIndex) % STORY_BACKGROUNDS.length],
-      media:
-        userIndex === 0 && storyIndex === 0
-          ? {
-              url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-              type: 'video',
-              alt: `${user.displayName} story ${storyIndex + 1}`,
-            }
-          : userIndex % 2 === 0
-          ? {
-              url: `https://images.unsplash.com/photo-${1500000000000 + userIndex * 4321 + storyIndex * 219}?w=900&h=1600&fit=crop`,
-              type: 'image',
-              alt: `${user.displayName} story ${storyIndex + 1}`,
-            }
-          : undefined,
-      viewersCount: 18 + userIndex * 9 + storyIndex * 4,
-      seenBy: userIndex % 2 === 0 && storyIndex === 0 ? ['user-1'] : [],
-      likedBy: userIndex % 3 === 0 ? ['user-1'] : [],
-      createdAt: new Date(now - (userIndex * 2 + storyIndex + 1) * 1000 * 60 * 43),
-      expiresAt: new Date(now + (24 - userIndex) * 1000 * 60 * 60),
-      author: toAuthorProfile(user),
-    }));
-  });
 }
 
 export const useStoryStore = create<StoryState>()(
   devtools(
-    persist(
-      (set, get) => ({
-        stories: [],
-        initialized: false,
+    (set) => ({
+      stories: [],
+      initialized: false,
 
-        seedStories: () => {
-          if (get().initialized) return;
-          set({
-            stories: makeSeedStories(),
-            initialized: true,
-          });
-        },
+      seedStories: async () => {
+        const response = await apiClient.get<StoryResponse>('/api/stories/feed');
+        set({
+          stories: response.data.stories ?? [],
+          initialized: true,
+        });
+      },
 
-        createStory: (authorId, caption, background, media): string => {
-          const author =
-            useAuthStore.getState().user?.id === authorId
-              ? useAuthStore.getState().user
-              : MOCK_USERS.find((user) => user.id === authorId);
+      createStory: async (_authorId, caption, background, media) => {
+        const response = await apiClient.post<StoryResponse>('/api/stories', {
+          caption,
+          background,
+          media,
+        });
+        const story = response.data.story;
+        if (!story) return '';
 
-          if (!author) return '';
+        set((state) => ({
+          stories: [story, ...state.stories],
+        }));
+        return story.id;
+      },
 
-          const story: StoryWithAuthor = {
-            id: `story-${storyIdCounter++}`,
-            authorId,
-            caption,
-            background,
-            media,
-            viewersCount: 0,
-            seenBy: [],
-            likedBy: [],
-            createdAt: new Date(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            author: toAuthorProfile(author),
-          };
-
-          set((state) => ({
-            stories: [story, ...state.stories],
-          }));
-
-          return story.id;
-        },
-
-        markSeen: (storyId, viewerId) => {
-          set((state) => ({
-            stories: state.stories.map((story) => {
-              if (story.id !== storyId || story.seenBy.includes(viewerId)) {
-                return story;
-              }
-
-              return {
-                ...story,
-                seenBy: [...story.seenBy, viewerId],
-                viewersCount: story.viewersCount + 1,
-              };
-            }),
-          }));
-        },
-
-        toggleLike: (storyId, userId) => {
-          set((state) => ({
-            stories: state.stories.map((story) => {
-              if (story.id !== storyId) {
-                return story;
-              }
-
-              if (story.likedBy.includes(userId)) {
-                return {
+      markSeen: async (storyId, viewerId) => {
+        await apiClient.post(`/api/stories/${storyId}/seen`);
+        set((state) => ({
+          stories: state.stories.map((story) =>
+            story.id !== storyId || story.seenBy.includes(viewerId)
+              ? story
+              : {
                   ...story,
-                  likedBy: story.likedBy.filter((id) => id !== userId),
-                };
-              }
+                  seenBy: [...story.seenBy, viewerId],
+                  viewersCount: story.viewersCount + 1,
+                }
+          ),
+        }));
+      },
 
-              return {
-                ...story,
-                likedBy: [...story.likedBy, userId],
-              };
-            }),
-          }));
-        },
+      toggleLike: async (storyId, _userId) => {
+        const response = await apiClient.post<StoryResponse>(`/api/stories/${storyId}/like`);
+        set((state) => ({
+          stories: state.stories.map((story) =>
+            story.id === storyId
+              ? { ...story, likedBy: response.data.likedBy ?? story.likedBy }
+              : story
+          ),
+        }));
+      },
 
-        deleteStory: (storyId, requesterId) => {
-          set((state) => ({
-            stories: state.stories.filter(
-              (story) => !(story.id === storyId && story.authorId === requesterId)
-            ),
-          }));
-        },
+      deleteStory: async (storyId, _requesterId) => {
+        await apiClient.delete(`/api/stories/${storyId}`);
+        set((state) => ({
+          stories: state.stories.filter((story) => story.id !== storyId),
+        }));
+      },
 
-        reshareStory: (storyId, resharedById) => {
-          const sourceStory = get().stories.find((story) => story.id === storyId);
-          if (!sourceStory) {
-            return '';
-          }
+      reshareStory: async (storyId, _resharedById) => {
+        const response = await apiClient.post<StoryResponse>(`/api/stories/${storyId}/reshare`);
+        const story = response.data.story;
+        if (!story) return '';
 
-          const author =
-            useAuthStore.getState().user?.id === resharedById
-              ? useAuthStore.getState().user
-              : MOCK_USERS.find((candidate) => candidate.id === resharedById);
+        set((state) => ({
+          stories: [story, ...state.stories],
+        }));
+        return story.id;
+      },
 
-          if (!author) {
-            return '';
-          }
-
-          const resharedStory: StoryWithAuthor = {
-            id: `story-${storyIdCounter++}`,
-            authorId: resharedById,
-            caption: sourceStory.caption,
-            background: sourceStory.background,
-            media: sourceStory.media ? { ...sourceStory.media } : undefined,
-            viewersCount: 0,
-            seenBy: [],
-            likedBy: [],
-            resharedFromStoryId: sourceStory.id,
-            resharedFromUserId: sourceStory.authorId,
-            createdAt: new Date(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            author: toAuthorProfile(author),
-          };
-
-          set((state) => ({
-            stories: [resharedStory, ...state.stories],
-          }));
-
-          return resharedStory.id;
-        },
-
-        removeExpiredStories: () => {
-          const now = Date.now();
-          set((state) => ({
-            stories: state.stories.filter(
-              (story) => new Date(story.expiresAt).getTime() > now
-            ),
-          }));
-        },
-      }),
-      {
-        name: 'story-storage',
-        version: 4,
-        migrate: (persistedState) => {
-          if (!persistedState || typeof persistedState !== 'object') {
-            return persistedState;
-          }
-
-          return {
-            ...persistedState,
-            stories: [],
-            initialized: false,
-          };
-        },
-      }
-    ),
+      removeExpiredStories: () => {
+        const now = Date.now();
+        set((state) => ({
+          stories: state.stories.filter((story) => new Date(story.expiresAt).getTime() > now),
+        }));
+      },
+    }),
     { name: 'story-store' }
   )
 );

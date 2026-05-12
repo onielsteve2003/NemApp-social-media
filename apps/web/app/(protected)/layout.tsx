@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useIsAuthenticated } from '@/stores/authStore';
+import { useSocialStore } from '@/stores/socialStore';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
 import { RightSidebar } from '@/components/layout/RightSidebar';
 
@@ -16,6 +17,9 @@ export default function ProtectedLayout({
   const login = useAuthStore((state) => state.login);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const autoDemoEnabled = useAuthStore((state) => state.autoDemoEnabled);
+  const user = useAuthStore((state) => state.user);
+  const fetchRelationships = useSocialStore((state) => state.fetchRelationships);
+  const [hasHydrated, setHasHydated] = useState(false);
 
   const handleNewPost = () => {
     router.push('/home');
@@ -27,7 +31,11 @@ export default function ProtectedLayout({
   };
 
   useEffect(() => {
-    if (isAuthenticated || isAuthLoading) {
+    setHasHydated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated || isAuthenticated || isAuthLoading) {
       return;
     }
 
@@ -39,16 +47,21 @@ export default function ProtectedLayout({
     void login('demo@example.com', 'Demo@1234').catch(() => {
       router.push('/login');
     });
-  }, [isAuthenticated, isAuthLoading, autoDemoEnabled, login, router]);
+  }, [hasHydrated, isAuthenticated, isAuthLoading, autoDemoEnabled, login, router]);
 
-  if (!isAuthenticated) {
+  useEffect(() => {
+    if (!user?.id) return;
+    void fetchRelationships();
+  }, [fetchRelationships, user?.id]);
+
+  if (!hasHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-slate-950">
         <svg className="animate-spin text-sky-400" width="32" height="32" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-        <p className="text-sm text-slate-300">Starting demo session...</p>
+        <p className="text-sm text-slate-300">Loading account...</p>
       </div>
     );
   }

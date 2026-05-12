@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import type { User } from '@shared-types';
-import { ApiClient } from '@api-client';
 import { mockAuthService } from '@/mocks/auth';
+import { apiClient, getApiErrorMessage, shouldFallbackToMock } from '@/lib/apiClient';
 
 interface AuthState {
   user: User | null;
@@ -11,6 +11,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   autoDemoEnabled: boolean;
+  hasHydrated: boolean;
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
@@ -35,31 +36,6 @@ interface AuthApiResponse {
   };
 }
 
-const apiClient = new ApiClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
-  timeout: 12000,
-});
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    const errorObject = error as { error?: { message?: string }; message?: string };
-    if (errorObject.error?.message) return errorObject.error.message;
-    if (errorObject.message) return errorObject.message;
-  }
-  return fallback;
-}
-
-function shouldFallbackToMock(error: unknown) {
-  const message = getErrorMessage(error, '').toLowerCase();
-  return (
-    message.includes('network error') ||
-    message.includes('econnrefused') ||
-    message.includes('failed to fetch') ||
-    message.includes('timeout')
-  );
-}
-
 export const useAuthStore = create<AuthState>()(
   devtools(
     persist(
@@ -70,6 +46,7 @@ export const useAuthStore = create<AuthState>()(
         isLoading: false,
         error: null,
         autoDemoEnabled: true,
+        hasHydrated: false,
 
         login: async (email: string, password: string) => {
           set({ isLoading: true, error: null });
@@ -101,7 +78,7 @@ export const useAuthStore = create<AuthState>()(
                 });
                 return;
               } catch (fallbackError) {
-                const fallbackMessage = getErrorMessage(fallbackError, 'Login failed');
+                const fallbackMessage = getApiErrorMessage(fallbackError, 'Login failed');
                 set({
                   error: fallbackMessage,
                   isLoading: false,
@@ -111,7 +88,7 @@ export const useAuthStore = create<AuthState>()(
             }
 
             const message =
-              getErrorMessage(error, 'Login failed');
+              getApiErrorMessage(error, 'Login failed');
             set({
               error: message,
               isLoading: false,
@@ -162,7 +139,7 @@ export const useAuthStore = create<AuthState>()(
                 });
                 return;
               } catch (fallbackError) {
-                const fallbackMessage = getErrorMessage(fallbackError, 'Registration failed');
+                const fallbackMessage = getApiErrorMessage(fallbackError, 'Registration failed');
                 set({
                   error: fallbackMessage,
                   isLoading: false,
@@ -172,7 +149,7 @@ export const useAuthStore = create<AuthState>()(
             }
 
             const message =
-              getErrorMessage(error, 'Registration failed');
+              getApiErrorMessage(error, 'Registration failed');
             set({
               error: message,
               isLoading: false,
@@ -210,6 +187,17 @@ export const useAuthStore = create<AuthState>()(
       }),
       {
         name: 'auth-storage',
+        onRehydrateStorage: () => (state) => {
+          if (state?.token) {
+            apiClient.setAuthToken(state.token);
+          }
+
+          if (state?.refreshToken) {
+            apiClient.setRefreshToken(state.refreshToken);
+          }
+
+          useAuthStore.setState({ hasHydrated: true });
+        },
       }
     )
   )

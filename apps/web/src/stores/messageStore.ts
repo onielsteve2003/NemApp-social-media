@@ -1,9 +1,8 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
-import type { Message, User } from '@shared-types';
-import { MOCK_USERS } from '@/mocks/auth';
+import { devtools } from 'zustand/middleware';
+import type { Message, UserProfile } from '@shared-types';
+import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotificationStore } from '@/stores/notificationStore';
 
 interface ConversationPreview {
   id: string;
@@ -11,6 +10,18 @@ interface ConversationPreview {
   lastMessage: string;
   lastMessageAt: Date;
   unreadCount: number;
+  participant: UserProfile | null;
+}
+
+interface MessageResponse {
+  success: boolean;
+  data: {
+    conversations?: ConversationPreview[];
+    messagesByConversation?: Record<string, Message[]>;
+    conversationId?: string;
+    message?: Message;
+    ok?: boolean;
+  };
 }
 
 interface MessageState {
@@ -18,215 +29,173 @@ interface MessageState {
   messagesByConversation: Record<string, Message[]>;
   activeConversationId: string | null;
   initializedForUserIds: string[];
-
-  seedMessages: (userId: string) => void;
-  openConversationWithUser: (participantId: string) => string | null;
-  setActiveConversation: (conversationId: string) => void;
-  sendMessage: (conversationId: string, content: string) => void;
-  markConversationRead: (conversationId: string) => void;
-  getParticipant: (participantId: string) => User | null;
+  participantsById: Record<string, UserProfile>;
+  seedMessages: (userId: string) => Promise<void>;
+  openConversationWithUser: (participantId: string) => Promise<string | null>;
+  setActiveConversation: (conversationId: string) => Promise<void>;
+  sendMessage: (conversationId: string, content: string) => Promise<void>;
+  markConversationRead: (conversationId: string) => Promise<void>;
+  editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
+  deleteMessage: (conversationId: string, messageId: string, scope?: 'me' | 'all') => Promise<void>;
+  hideConversationForMe: (conversationId: string) => Promise<void>;
+  getParticipant: (participantId: string) => UserProfile | null;
 }
 
-let messageIdCounter = 1;
-
-function makeSeedConversation(userId: string, participantId: string, index: number) {
-  const conversationId = `conv-${userId}-${participantId}`;
-  const now = Date.now();
-
-  const messages: Message[] = [
-    {
-      id: `msg-${messageIdCounter++}`,
-      conversationId,
-      senderId: participantId,
-      content: index === 0 ? 'Hey! Loving the NemApp build progress.' : 'Are you shipping Stage 5 today?',
-      isRead: index !== 0,
-      createdAt: new Date(now - (index + 1) * 1000 * 60 * 42),
-    },
-    {
-      id: `msg-${messageIdCounter++}`,
-      conversationId,
-      senderId: userId,
-      content: index === 0 ? 'Thank you! Working on social features now.' : 'Yes, notifications and messages are in progress.',
-      isRead: true,
-      readAt: new Date(now - (index + 1) * 1000 * 60 * 30),
-      createdAt: new Date(now - (index + 1) * 1000 * 60 * 32),
-    },
-  ];
-
-  return {
-    conversationId,
-    messages,
-    preview: {
-      id: conversationId,
-      participantId,
-      lastMessage: messages[messages.length - 1]?.content ?? '',
-      lastMessageAt: messages[messages.length - 1]?.createdAt ?? new Date(),
-      unreadCount: index === 0 ? 1 : 0,
-    },
-  };
+function buildParticipantsMap(conversations: ConversationPreview[]) {
+  return conversations.reduce<Record<string, UserProfile>>((acc, conversation) => {
+    if (conversation.participant) {
+      acc[conversation.participantId] = conversation.participant;
+    }
+    return acc;
+  }, {});
 }
 
 export const useMessageStore = create<MessageState>()(
   devtools(
-    persist(
-      (set, get) => ({
-        conversations: [],
-        messagesByConversation: {},
-        activeConversationId: null,
-        initializedForUserIds: [],
+    (set, get) => ({
+      conversations: [],
+      messagesByConversation: {},
+      activeConversationId: null,
+      initializedForUserIds: [],
+      participantsById: {},
 
-        seedMessages: (userId) => {
-          if (get().initializedForUserIds.includes(userId)) return;
+      seedMessages: async (userId) => {
+        const response = await apiClient.get<MessageResponse>('/api/messages/conversations');
+        const conversations = response.data.conversations ?? [];
+        set((state) => ({
+          conversations,
+          messagesByConversation: response.data.messagesByConversation ?? {},
+          activeConversationId: conversations[0]?.id ?? state.activeConversationId,
+          initializedForUserIds: state.initializedForUserIds.includes(userId)
+            ? state.initializedForUserIds
+            : [...state.initializedForUserIds, userId],
+          participantsById: buildParticipantsMap(conversations),
+        }));
+      },
 
-          const participants = MOCK_USERS.filter((u) => u.id !== userId).slice(0, 2);
-          if (participants.length === 0) return;
+      openConversationWithUser: async (participantId) => {
+        const user = useAuthStore.getState().user;
+        if (!user || participantId === user.id) return null;
 
-          const seeded = participants.map((person, idx) =>
-            makeSeedConversation(userId, person.id, idx)
-          );
+        const existing = get().conversations.find(
+          (conversation) => conversation.participantId === participantId
+        );
+        if (existing) {
+          await get().setActiveConversation(existing.id);
+          return existing.id;
+        }
 
-          const nextMessagesByConversation: Record<string, Message[]> = {};
-          for (const item of seeded) {
-            nextMessagesByConversation[item.conversationId] = item.messages;
-          }
+        const response = await apiClient.post<MessageResponse>('/api/messages/conversations/open', {
+          participantId,
+        });
+        const conversationId = response.data.conversationId ?? null;
+        if (!conversationId) return null;
 
-          set((state) => ({
-            conversations: [...seeded.map((item) => item.preview), ...state.conversations],
-            messagesByConversation: {
-              ...nextMessagesByConversation,
-              ...state.messagesByConversation,
-            },
-            activeConversationId: seeded[0]?.conversationId ?? state.activeConversationId,
-            initializedForUserIds: [...state.initializedForUserIds, userId],
-          }));
-        },
+        await get().seedMessages(user.id);
+        set({ activeConversationId: conversationId });
+        return conversationId;
+      },
 
-        openConversationWithUser: (participantId) => {
-          const user = useAuthStore.getState().user;
-          if (!user || participantId === user.id) return null;
+      setActiveConversation: async (conversationId) => {
+        set({ activeConversationId: conversationId });
+        await get().markConversationRead(conversationId);
+      },
 
-          const existing = get().conversations.find(
-            (conversation) => conversation.participantId === participantId
-          );
+      sendMessage: async (conversationId, content) => {
+        const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${conversationId}/messages`, {
+          content,
+        });
+        const message = response.data.message;
+        if (!message) return;
 
-          if (existing) {
-            set({ activeConversationId: existing.id });
-            get().markConversationRead(existing.id);
-            return existing.id;
-          }
-
-          const now = new Date();
-          const conversationId = `conv-${user.id}-${participantId}`;
-          const starterMessage: Message = {
-            id: `msg-${messageIdCounter++}`,
-            conversationId,
-            senderId: participantId,
-            content: 'Hey! Thanks for connecting on NemApp.',
-            isRead: false,
-            createdAt: now,
-          };
-
-          set((state) => ({
-            conversations: [
-              {
-                id: conversationId,
-                participantId,
-                lastMessage: starterMessage.content,
-                lastMessageAt: starterMessage.createdAt,
-                unreadCount: 1,
-              },
-              ...state.conversations,
-            ],
-            messagesByConversation: {
-              ...state.messagesByConversation,
-              [conversationId]: [starterMessage],
-            },
-            activeConversationId: conversationId,
-          }));
-
-          return conversationId;
-        },
-
-        setActiveConversation: (conversationId) => {
-          set({ activeConversationId: conversationId });
-          get().markConversationRead(conversationId);
-        },
-
-        sendMessage: (conversationId, content) => {
-          const user = useAuthStore.getState().user;
-          if (!user) return;
-
-          const newMessage: Message = {
-            id: `msg-${messageIdCounter++}`,
-            conversationId,
-            senderId: user.id,
-            content,
-            isRead: true,
-            createdAt: new Date(),
-          };
-
-          set((state) => {
-            const existing = state.messagesByConversation[conversationId] ?? [];
-            return {
-              messagesByConversation: {
-                ...state.messagesByConversation,
-                [conversationId]: [...existing, newMessage],
-              },
-              conversations: state.conversations
-                .map((conv) =>
-                  conv.id === conversationId
-                    ? {
-                        ...conv,
-                        lastMessage: content,
-                        lastMessageAt: newMessage.createdAt,
-                      }
-                    : conv
-                )
-                .sort(
-                  (a, b) =>
-                    new Date(b.lastMessageAt).getTime() -
-                    new Date(a.lastMessageAt).getTime()
-                ),
-            };
-          });
-
-          const participantId = get().conversations.find(
-            (conversation) => conversation.id === conversationId
-          )?.participantId;
-
-          if (participantId) {
-            useNotificationStore
-              .getState()
-              .addNotification(participantId, user.id, 'message', conversationId);
-          }
-        },
-
-        markConversationRead: (conversationId) => {
-          set((state) => ({
-            conversations: state.conversations.map((conv) =>
-              conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
+        set((state) => ({
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: [...(state.messagesByConversation[conversationId] ?? []), message],
+          },
+          conversations: state.conversations
+            .map((conversation) =>
+              conversation.id === conversationId
+                ? { ...conversation, lastMessage: content, lastMessageAt: message.createdAt }
+                : conversation
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
             ),
+        }));
+      },
+
+      markConversationRead: async (conversationId) => {
+        await apiClient.post(`/api/messages/conversations/${conversationId}/read`);
+        set((state) => ({
+          conversations: state.conversations.map((conversation) =>
+            conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation
+          ),
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: (state.messagesByConversation[conversationId] ?? []).map((message) => ({
+              ...message,
+              isRead: true,
+              readAt: message.readAt ?? new Date(),
+            })),
+          },
+        }));
+      },
+
+      editMessage: async (conversationId, messageId, content) => {
+        const response = await apiClient.patch<MessageResponse>(
+          `/api/messages/conversations/${conversationId}/messages/${messageId}`,
+          { content }
+        );
+        const message = response.data.message;
+        if (!message) return;
+
+        set((state) => ({
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: (state.messagesByConversation[conversationId] ?? []).map((item) =>
+              item.id === messageId ? { ...item, ...message } : item
+            ),
+          },
+        }));
+      },
+
+      deleteMessage: async (conversationId, messageId, scope = 'me') => {
+        await apiClient.delete(`/api/messages/conversations/${conversationId}/messages/${messageId}?scope=${scope}`);
+        if (scope === 'me') {
+          const authUser = useAuthStore.getState().user;
+          set((state) => ({
             messagesByConversation: {
               ...state.messagesByConversation,
-              [conversationId]: (state.messagesByConversation[conversationId] ?? []).map((msg) => ({
-                ...msg,
-                isRead: true,
-                readAt: msg.readAt ?? new Date(),
-              })),
+              [conversationId]: (state.messagesByConversation[conversationId] ?? []).filter((item) => item.id !== messageId || item.senderId !== authUser?.id),
             },
           }));
-        },
+        } else {
+          set((state) => ({
+            messagesByConversation: {
+              ...state.messagesByConversation,
+              [conversationId]: (state.messagesByConversation[conversationId] ?? []).filter((item) => item.id !== messageId),
+            },
+          }));
+        }
+      },
 
-        getParticipant: (participantId) => {
-          const authUser = useAuthStore.getState().user;
-          if (authUser?.id === participantId) return authUser;
-          return MOCK_USERS.find((u) => u.id === participantId) ?? null;
-        },
-      }),
-      {
-        name: 'message-storage',
-      }
-    ),
+      hideConversationForMe: async (conversationId) => {
+        await apiClient.post(`/api/messages/conversations/${conversationId}/hide`);
+        set((state) => ({
+          conversations: state.conversations.filter((conversation) => conversation.id !== conversationId),
+          activeConversationId:
+            state.activeConversationId === conversationId ? null : state.activeConversationId,
+        }));
+      },
+
+      getParticipant: (participantId) => {
+        const authUser = useAuthStore.getState().user;
+        if (authUser?.id === participantId) return authUser;
+        return get().participantsById[participantId] ?? null;
+      },
+    }),
     { name: 'message-store' }
   )
 );

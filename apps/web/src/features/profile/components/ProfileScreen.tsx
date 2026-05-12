@@ -6,9 +6,10 @@ import { useAuthStore, useAuthUser } from '@/stores/authStore';
 import { useTweetStore } from '@/stores/tweetStore';
 import { useSocialStore } from '@/stores/socialStore';
 import { useStoryStore } from '@/stores/storyStore';
-import { MOCK_USERS } from '@/mocks/auth';
+import { apiClient } from '@/lib/apiClient';
 import { VerifiedBadge } from '@/components/common/VerifiedBadge';
 import { TweetCard } from '@/features/feed/components/TweetCard';
+import type { UserProfile } from '@shared-types';
 
 type ProfileTab = 'posts' | 'replies' | 'likes';
 type SocialModal = 'followers' | 'following' | null;
@@ -24,12 +25,26 @@ interface ProfileScreenProps {
   username?: string;
 }
 
+interface UserProfileResponse {
+  success: boolean;
+  data: {
+    user: UserProfile;
+  };
+}
+
+interface UserListResponse {
+  success: boolean;
+  data: {
+    users: UserProfile[];
+  };
+}
+
 export function ProfileScreen({ username }: ProfileScreenProps) {
   const router = useRouter();
   const authUser = useAuthUser();
   const setAuthUser = useAuthStore((state) => state.setUser);
   const { feed, isLoading, fetchFeed, likedIds } = useTweetStore();
-  const { followingIds, toggleFollow, isFollowing } = useSocialStore();
+  const { toggleFollow, isFollowing, followingIds, profilesById, hydrateProfiles } = useSocialStore();
   const { stories, seedStories, removeExpiredStories, markSeen } = useStoryStore();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
@@ -41,6 +56,9 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const [editLocation, setEditLocation] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [viewedProfile, setViewedProfile] = useState<UserProfile | null>(null);
+  const [followersUsers, setFollowersUsers] = useState<UserProfile[]>([]);
+  const [followingUsers, setFollowingUsers] = useState<UserProfile[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<{
     [userId: string]: { allPosts: boolean; likes: boolean; replies: boolean };
   }>({});
@@ -56,17 +74,51 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   }, [authUser, router, feed.length, fetchFeed]);
 
   useEffect(() => {
-    seedStories();
+    void seedStories();
     removeExpiredStories();
   }, [removeExpiredStories, seedStories]);
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    if (!username || username.toLowerCase() === authUser.username.toLowerCase()) {
+      setViewedProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      try {
+        const response = await apiClient.get<UserProfileResponse>(`/api/users/${encodeURIComponent(username)}`);
+        if (!cancelled) {
+          const user = response.data.user ?? null;
+          if (user) {
+            hydrateProfiles([user]);
+          }
+          setViewedProfile(user);
+        }
+      } catch {
+        if (!cancelled) {
+          setViewedProfile(null);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, username, hydrateProfiles]);
 
   const targetUser = useMemo(() => {
     if (!authUser) return null;
     if (!username || username.toLowerCase() === authUser.username.toLowerCase()) {
       return authUser;
     }
-    return MOCK_USERS.find((u) => u.username.toLowerCase() === username.toLowerCase()) ?? null;
-  }, [authUser, username]);
+    return viewedProfile;
+  }, [authUser, username, viewedProfile]);
 
   const isOwnProfile = targetUser?.id === authUser?.id;
 
@@ -115,31 +167,55 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           ? likedTweets
           : [];
 
-  const peopleWithoutTarget = useMemo(() => {
-    if (!targetUser) return [];
-    return MOCK_USERS.filter((u) => u.id !== targetUser.id);
-  }, [targetUser]);
+  const cachedFollowingUsers = useMemo(
+    () => followingIds
+      .map((userId) => profilesById[userId])
+      .filter((profile): profile is UserProfile => Boolean(profile)),
+    [followingIds, profilesById]
+  );
 
-  const followersUsers = useMemo(() => {
-    if (!targetUser) return [];
-    const users = peopleWithoutTarget.slice(0, 8);
-    const authFollowsTarget =
-      authUser && authUser.id !== targetUser.id && followingIds.includes(targetUser.id);
-
-    if (authFollowsTarget && authUser && !users.some((u) => u.id === authUser.id)) {
-      return [authUser, ...users].slice(0, 8);
+  useEffect(() => {
+    if (openModal === 'following' && isOwnProfile) {
+      setFollowingUsers(cachedFollowingUsers);
     }
+  }, [openModal, isOwnProfile, cachedFollowingUsers]);
 
-    return users;
-  }, [targetUser, peopleWithoutTarget, followingIds, authUser]);
+  useEffect(() => {
+    if (!openModal || !targetUser?.username) return;
 
-  const followingUsers = useMemo(() => {
-    if (!targetUser) return [];
-    if (isOwnProfile) {
-      return MOCK_USERS.filter((u) => followingIds.includes(u.id));
-    }
-    return peopleWithoutTarget.slice(0, 5);
-  }, [targetUser, isOwnProfile, followingIds, peopleWithoutTarget]);
+    let cancelled = false;
+
+    const loadUsers = async () => {
+      try {
+        const endpoint = openModal === 'followers'
+          ? `/api/users/${encodeURIComponent(targetUser.username)}/followers`
+          : `/api/users/${encodeURIComponent(targetUser.username)}/following`;
+        const response = await apiClient.get<UserListResponse>(endpoint);
+        if (cancelled) return;
+
+        const users = response.data.users ?? [];
+        hydrateProfiles(users);
+        if (openModal === 'followers') {
+          setFollowersUsers(users);
+        } else {
+          setFollowingUsers(users);
+        }
+      } catch {
+        if (cancelled) return;
+        if (openModal === 'followers') {
+          setFollowersUsers([]);
+        } else {
+          setFollowingUsers([]);
+        }
+      }
+    };
+
+    void loadUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openModal, targetUser?.username, hydrateProfiles]);
 
   useEffect(() => {
     if (!authUser) return;
@@ -150,20 +226,20 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     setEditAvatar(authUser.avatar ?? '');
   }, [authUser]);
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!authUser) return;
     const trimmedName = editDisplayName.trim();
     if (!trimmedName) return;
 
-    const updatedUser = {
-      ...authUser,
+    const response = await apiClient.patch<{ success: boolean; data: { user: typeof authUser } }>('/api/users/me', {
       displayName: trimmedName,
       bio: editBio.trim(),
       location: editLocation.trim(),
       website: editWebsite.trim(),
       avatar: editAvatar.trim() || authUser.avatar,
-      updatedAt: new Date(),
-    };
+    });
+    const updatedUser = response.data.user;
+    if (!updatedUser) return;
 
     setAuthUser(updatedUser);
 
@@ -211,24 +287,20 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
         <EmptyState
           title="Profile not found"
-          body="This account does not exist in the demo data yet."
+          body="This account could not be loaded."
         />
       </div>
     );
   }
 
   const currentlyFollowing = !isOwnProfile && isFollowing(targetUser.id);
-  const followersCount =
-    targetUser.followersCount +
-    (!isOwnProfile && currentlyFollowing ? 1 : 0);
-  const followingCount =
-    targetUser.followingCount +
-    (isOwnProfile ? followingIds.length : 0);
-
-  const hasActiveStory = targetUserStories.length > 0;
+  const followersCount = targetUser.followersCount;
+  const followingCount = targetUser.followingCount;
+  const canViewTargetStory = isOwnProfile || currentlyFollowing;
+  const hasActiveStory = canViewTargetStory && targetUserStories.length > 0;
 
   const openProfileStory = () => {
-    if (!hasActiveStory) return;
+    if (!hasActiveStory || !canViewTargetStory) return;
 
     const nextIndex = targetUserStories.findIndex(
       (story) => authUser && !story.seenBy.includes(authUser.id)
@@ -237,7 +309,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     setActiveStoryIndex(indexToOpen);
 
     if (authUser && targetUser.id !== authUser.id) {
-      markSeen(targetUserStories[indexToOpen].id, authUser.id);
+      void markSeen(targetUserStories[indexToOpen].id, authUser.id);
     }
   };
 
@@ -252,7 +324,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
     setActiveStoryIndex(nextIndex);
     if (authUser && targetUser.id !== authUser.id) {
-      markSeen(targetUserStories[nextIndex].id, authUser.id);
+      void markSeen(targetUserStories[nextIndex].id, authUser.id);
     }
   };
 
@@ -329,7 +401,9 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   Message
                 </button>
                 <button
-                  onClick={() => toggleFollow(targetUser.id)}
+                  onClick={() => {
+                    void toggleFollow(targetUser.id);
+                  }}
                   className={`
                     rounded-full px-4 py-1.5 text-sm font-semibold transition-colors
                     ${currentlyFollowing
@@ -633,12 +707,19 @@ function SocialListModal({
   onClose,
 }: {
   title: string;
-  users: typeof MOCK_USERS;
+  users: UserProfile[];
   authUserId: string;
   onToggleFollow: (userId: string) => void;
   isFollowing: (userId: string) => boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
+
+  const openProfile = (username: string) => {
+    onClose();
+    router.push(`/profile/${username}`);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
@@ -672,21 +753,30 @@ function SocialListModal({
 
             return (
               <div key={person.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-b-0">
-                <img
-                  src={person.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${person.username}`}
-                  alt={person.displayName}
-                  className="h-11 w-11 rounded-full bg-slate-700"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-white truncate">{person.displayName}</p>
-                  <p className="text-xs text-slate-400 truncate">@{person.username}</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openProfile(person.username)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <img
+                    src={person.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${person.username}`}
+                    alt={person.displayName}
+                    className="h-11 w-11 rounded-full bg-slate-700"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-white truncate hover:underline">{person.displayName}</p>
+                    <p className="text-xs text-slate-400 truncate hover:underline">@{person.username}</p>
+                  </div>
+                </button>
 
                 {self ? (
                   <span className="rounded-full border border-white/20 text-slate-300 text-xs font-semibold px-3 py-1">You</span>
                 ) : (
                   <button
-                    onClick={() => onToggleFollow(person.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleFollow(person.id);
+                    }}
                     className={`
                       rounded-full text-sm font-bold px-4 py-1.5 transition-colors
                       ${following
@@ -732,7 +822,7 @@ function EditProfileModal({
   avatar: string;
   setAvatar: (value: string) => void;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -808,7 +898,9 @@ function EditProfileModal({
             Cancel
           </button>
           <button
-            onClick={onSave}
+            onClick={() => {
+              void onSave();
+            }}
             disabled={displayName.trim().length === 0}
             className="rounded-full bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-sky-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >

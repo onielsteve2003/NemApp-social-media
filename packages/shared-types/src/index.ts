@@ -141,6 +141,10 @@ export interface Message {
   media?: MediaItem[];
   isRead: boolean;
   readAt?: Date;
+  editedAt?: Date;
+  deletedAt?: Date;
+  deletedForIds?: string[];
+  deletedForEveryoneAt?: Date;
   createdAt: Date;
 }
 
