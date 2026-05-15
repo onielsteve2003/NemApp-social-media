@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: social-media-api
+    runtime: node
+    region: oregon
+    rootDir: apps/api
+    buildCommand: cd ../.. && npm install && npm run build --workspace @social-media/shared-types && npm run build --workspace @social-media/api
+    startCommand: node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_NAME
+        value: social-media
+      - key: JWT_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: REFRESH_TOKEN_EXPIRE
+        value: 30d
+      - key: FRONTEND_URL
+        sync: false
