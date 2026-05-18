@@ -8,6 +8,7 @@ export interface ApiClientConfig {
 
 export class ApiClient {
   private client: AxiosInstance;
+  private hasHandledUnauthorized = false;
 
   private getStorage(): {
     getItem: (key: string) => string | null;
@@ -31,6 +32,14 @@ export class ApiClient {
       };
     };
     globalObject.location?.reload?.();
+  }
+
+  private clearPersistedAuthState(): void {
+    const storage = this.getStorage();
+    if (!storage) return;
+    storage.removeItem('auth_token');
+    storage.removeItem('refresh_token');
+    storage.removeItem('auth-storage');
   }
 
   constructor(config: ApiClientConfig) {
@@ -60,9 +69,13 @@ export class ApiClient {
       (response) => response.data,
       (error) => {
         if (error.response?.status === 401) {
-          // Handle unauthorized - clear auth and redirect
-          this.clearAuthToken();
-          this.reloadPage();
+          const hasToken = Boolean(this.getAuthToken());
+          if (hasToken && !this.hasHandledUnauthorized) {
+            // Handle expired/invalid token once to avoid reload loops.
+            this.hasHandledUnauthorized = true;
+            this.clearPersistedAuthState();
+            this.reloadPage();
+          }
         }
         return Promise.reject(error.response?.data || error.message);
       }
