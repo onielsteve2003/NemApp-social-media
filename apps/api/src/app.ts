@@ -55,11 +55,21 @@ app.use((_req, _res, next) => {
 
 // Error handling
 app.use((err: any, _req: any, res: any, _next: any) => {
-  console.error('Error:', err);
-  res.status(err.statusCode || 500).json({
+  const statusCode = err.statusCode || 500;
+  const code = err.code || 'INTERNAL_ERROR';
+  const message = err.message || 'Internal server error';
+
+  // Avoid noisy stack traces for expected client-side errors (401/404/etc.)
+  if (statusCode >= 500) {
+    console.error('Error:', err);
+  } else {
+    console.warn(`HTTP ${statusCode} ${code}: ${message}`);
+  }
+
+  res.status(statusCode).json({
     error: {
-      code: err.code || 'INTERNAL_ERROR',
-      message: err.message || 'Internal server error',
+      code,
+      message,
     },
   });
 });
