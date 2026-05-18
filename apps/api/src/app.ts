@@ -13,13 +13,30 @@ import messageRoutes from './routes/messageRoutes.js';
 import { HttpError } from './utils/httpError.js';
 
 const app = express();
+const normalizedFrontendOrigin = env.frontendUrl.replace(/\/+$/, '');
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: env.frontendUrl,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server and health-check requests with no Origin header.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedRequestOrigin = origin.replace(/\/+$/, '');
+      if (normalizedRequestOrigin === normalizedFrontendOrigin) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new HttpError(403, 'CORS_BLOCKED', `Origin not allowed: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
