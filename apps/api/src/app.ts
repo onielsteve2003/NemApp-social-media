@@ -29,6 +29,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Root handlers for platform probes (Render often checks / with HEAD)
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Social Media API is running',
+    health: '/api/health',
+  });
+});
+
+app.head('/', (_req, res) => {
+  res.sendStatus(200);
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tweets', tweetRoutes);
