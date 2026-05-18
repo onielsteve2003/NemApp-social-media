@@ -5,7 +5,7 @@ import type {
   User,
   UserProfile,
 } from '@social-media/shared-types';
-import { UserModel } from '../models/UserModel';
+import { UserModel } from '../models/UserModel.js';
 
 type UserDocLike = {
   _id: unknown;

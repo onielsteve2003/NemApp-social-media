@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from 'express';
-import type { AuthedRequest } from '../middleware/authMiddleware';
-import { notificationService } from '../services/notificationService';
+import type { AuthedRequest } from '../middleware/authMiddleware.js';
+import { notificationService } from '../services/notificationService.js';
 
 export const notificationController = {
   async list(req: AuthedRequest, res: Response, next: NextFunction) {

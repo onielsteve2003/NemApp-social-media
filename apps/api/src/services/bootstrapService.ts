@@ -1,10 +1,10 @@
 import bcrypt from 'bcryptjs';
-import { ConversationModel } from '../models/ConversationModel';
-import { NotificationModel } from '../models/NotificationModel';
-import { StoryModel } from '../models/StoryModel';
-import { TweetModel } from '../models/TweetModel';
-import { UserModel } from '../models/UserModel';
-import { DEMO_PASSWORD, MOCK_API_USERS } from '../data/mockUsers';
+import { ConversationModel } from '../models/ConversationModel.js';
+import { NotificationModel } from '../models/NotificationModel.js';
+import { StoryModel } from '../models/StoryModel.js';
+import { TweetModel } from '../models/TweetModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { DEMO_PASSWORD, MOCK_API_USERS } from '../data/mockUsers.js';
 
 const SAMPLE_POSTS = [
   'Quietly shipping beats loudly planning.',

@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import http from 'http';
-import app from './app';
+import mongoose from 'mongoose';
+import app from './app.js';
 import { Server as SocketIOServer } from 'socket.io';
-import { env } from './config/env';
-import { connectDatabase } from './config/database';
-import { ensureSeedData } from './services/bootstrapService';
+import { env } from './config/env.js';
+import { connectDatabase } from './config/database.js';
+import { ensureSeedData } from './services/bootstrapService.js';
 
 const PORT = env.port;
 const HOST = env.host;
@@ -29,7 +30,13 @@ io.on('connection', (socket) => {
 
 async function bootstrap() {
   await connectDatabase();
-  await ensureSeedData();
+
+  if (mongoose.connection.readyState === 1) {
+    await ensureSeedData();
+  } else {
+    console.warn('⚠️  MongoDB is still unavailable. Skipping seed bootstrap until the database is reachable.');
+  }
+
   server.listen(PORT, HOST, () => {
     console.log(`🚀 Server running at http://${HOST}:${PORT}`);
     console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);

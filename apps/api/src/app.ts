@@ -3,14 +3,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import 'dotenv/config';
-import { env } from './config/env';
-import authRoutes from './routes/authRoutes';
-import userRoutes from './routes/userRoutes';
-import tweetRoutes from './routes/tweetRoutes';
-import storyRoutes from './routes/storyRoutes';
-import notificationRoutes from './routes/notificationRoutes';
-import messageRoutes from './routes/messageRoutes';
-import { HttpError } from './utils/httpError';
+import { env } from './config/env.js';
+import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import tweetRoutes from './routes/tweetRoutes.js';
+import storyRoutes from './routes/storyRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
+import { HttpError } from './utils/httpError.js';
 
 const app = express();
 

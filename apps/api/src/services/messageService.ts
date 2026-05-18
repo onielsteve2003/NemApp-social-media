@@ -1,9 +1,9 @@
 import type { Message } from '@social-media/shared-types';
-import { ConversationModel } from '../models/ConversationModel';
-import { UserModel } from '../models/UserModel';
-import { HttpError } from '../utils/httpError';
-import { findUsersByIds, toUserProfile, type SerializedUserDoc } from '../utils/serializers';
-import { notificationService } from './notificationService';
+import { ConversationModel } from '../models/ConversationModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { HttpError } from '../utils/httpError.js';
+import { findUsersByIds, toUserProfile, type SerializedUserDoc } from '../utils/serializers.js';
+import { notificationService } from './notificationService.js';
 
 function participantKey(userA: string, userB: string) {
   return [userA, userB].sort().join(':');

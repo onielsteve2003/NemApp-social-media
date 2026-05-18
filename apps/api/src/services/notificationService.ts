@@ -1,7 +1,7 @@
-import { NotificationModel } from '../models/NotificationModel';
-import { UserModel } from '../models/UserModel';
-import { HttpError } from '../utils/httpError';
-import { findUsersByIds, toNotificationWithActor, type SerializedUserDoc } from '../utils/serializers';
+import { NotificationModel } from '../models/NotificationModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { HttpError } from '../utils/httpError.js';
+import { findUsersByIds, toNotificationWithActor, type SerializedUserDoc } from '../utils/serializers.js';
 
 export const notificationService = {
   async create(userId: string, actorId: string, type: string, targetId?: string) {

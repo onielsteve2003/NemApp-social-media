@@ -1,14 +1,14 @@
 import mongoose from 'mongoose';
-import { UserModel } from '../models/UserModel';
-import { HttpError } from '../utils/httpError';
+import { UserModel } from '../models/UserModel.js';
+import { HttpError } from '../utils/httpError.js';
 import {
   findUsersByIds,
   orderProfilesByIds,
   toPublicUser,
   toUserProfile,
   type SerializedUserDoc,
-} from '../utils/serializers';
-import { notificationService } from './notificationService';
+} from '../utils/serializers.js';
+import { notificationService } from './notificationService.js';
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -1,8 +1,8 @@
-import { TweetModel } from '../models/TweetModel';
-import { UserModel } from '../models/UserModel';
-import { HttpError } from '../utils/httpError';
-import { findUsersByIds, toTweetWithAuthor, type SerializedUserDoc } from '../utils/serializers';
-import { notificationService } from './notificationService';
+import { TweetModel } from '../models/TweetModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { HttpError } from '../utils/httpError.js';
+import { findUsersByIds, toTweetWithAuthor, type SerializedUserDoc } from '../utils/serializers.js';
+import { notificationService } from './notificationService.js';
 
 function extractHashtags(content: string) {
   return content.match(/#(\w+)/g)?.map((tag) => tag.slice(1)) ?? [];

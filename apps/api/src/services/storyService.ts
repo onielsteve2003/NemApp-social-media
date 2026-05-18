@@ -1,7 +1,7 @@
-import { StoryModel } from '../models/StoryModel';
-import { UserModel } from '../models/UserModel';
-import { HttpError } from '../utils/httpError';
-import { findUsersByIds, toStoryWithAuthor, type SerializedUserDoc } from '../utils/serializers';
+import { StoryModel } from '../models/StoryModel.js';
+import { UserModel } from '../models/UserModel.js';
+import { HttpError } from '../utils/httpError.js';
+import { findUsersByIds, toStoryWithAuthor, type SerializedUserDoc } from '../utils/serializers.js';
 
 export const storyService = {
   async getFeed(userId: string) {

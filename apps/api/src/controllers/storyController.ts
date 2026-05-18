@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from 'express';
-import type { AuthedRequest } from '../middleware/authMiddleware';
-import { storyService } from '../services/storyService';
+import type { AuthedRequest } from '../middleware/authMiddleware.js';
+import { storyService } from '../services/storyService.js';
 
 export const storyController = {
   async feed(req: AuthedRequest, res: Response, next: NextFunction) {

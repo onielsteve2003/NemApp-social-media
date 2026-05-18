@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/authMiddleware';
-import { tweetController } from '../controllers/tweetController';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { tweetController } from '../controllers/tweetController.js';
 
 const router = Router();
 

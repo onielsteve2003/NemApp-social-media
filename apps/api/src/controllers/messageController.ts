@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from 'express';
-import type { AuthedRequest } from '../middleware/authMiddleware';
-import { messageService } from '../services/messageService';
+import type { AuthedRequest } from '../middleware/authMiddleware.js';
+import { messageService } from '../services/messageService.js';
 
 export const messageController = {
   async conversations(req: AuthedRequest, res: Response, next: NextFunction) {

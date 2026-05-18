@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from 'express';
-import type { AuthedRequest } from '../middleware/authMiddleware';
-import { tweetService } from '../services/tweetService';
+import type { AuthedRequest } from '../middleware/authMiddleware.js';
+import { tweetService } from '../services/tweetService.js';
 
 export const tweetController = {
   async feed(req: AuthedRequest, res: Response, next: NextFunction) {

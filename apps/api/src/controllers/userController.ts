@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from 'express';
-import type { AuthedRequest } from '../middleware/authMiddleware';
-import { userService } from '../services/userService';
+import type { AuthedRequest } from '../middleware/authMiddleware.js';
+import { userService } from '../services/userService.js';
 
 export const userController = {
   async relationships(req: AuthedRequest, res: Response, next: NextFunction) {

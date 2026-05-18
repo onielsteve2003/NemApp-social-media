@@ -2,10 +2,10 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import type { User } from '@social-media/shared-types';
-import { env } from '../config/env';
-import { HttpError } from '../utils/httpError';
-import { findMockDemoRecordByEmail } from '../data/mockUsers';
-import { UserModel } from '../models/UserModel';
+import { env } from '../config/env.js';
+import { HttpError } from '../utils/httpError.js';
+import { findMockDemoRecordByEmail } from '../data/mockUsers.js';
+import { UserModel } from '../models/UserModel.js';
 
 interface TokenPayload {
   userId: string;
