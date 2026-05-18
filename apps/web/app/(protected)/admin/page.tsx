@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthUser } from '@/stores/authStore';
 import { MOCK_USERS } from '@/mocks/auth';

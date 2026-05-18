@@ -56,7 +56,7 @@ export default function OnboardingPage() {
         'success'
       );
       router.push('/home');
-    } catch (err) {
+    } catch {
       addToast('Failed to complete onboarding', 'error');
     } finally {
       setIsLoading(false);
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
 
         {/* Stats */}
         <div className="text-center p-6 bg-white/5 backdrop-blur border border-white/10 rounded-2xl">
-          <p className="text-gray-400 mb-2">You're following</p>
+          <p className="text-gray-400 mb-2">You&apos;re following</p>
           <p className="text-4xl font-bold text-primary">
             {followingUsers.size}
           </p>
