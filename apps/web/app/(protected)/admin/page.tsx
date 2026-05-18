@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthUser } from '@/stores/authStore';
 import { MOCK_USERS } from '@/mocks/auth';
@@ -52,6 +52,20 @@ export default function AdminDashboardPage() {
   const user = useAuthUser();
   const feed = useTweetStore((state) => state.feed);
 
+  const analytics = useMemo(() => {
+    const totalUsers = MOCK_USERS.length;
+    const totalPosts = feed.length;
+    const verifiedUsers = MOCK_USERS.filter((u) => u.isVerified).length;
+    const totalFollowers = MOCK_USERS.reduce((sum, u) => sum + u.followersCount, 0);
+
+    return {
+      totalUsers,
+      totalPosts,
+      verifiedUsers,
+      totalFollowers,
+    };
+  }, [feed.length]);
+
   if (!user) {
     router.push('/login');
     return null;
@@ -73,20 +87,6 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-
-  const analytics = useMemo(() => {
-    const totalUsers = MOCK_USERS.length;
-    const totalPosts = feed.length;
-    const verifiedUsers = MOCK_USERS.filter((u) => u.isVerified).length;
-    const totalFollowers = MOCK_USERS.reduce((sum, u) => sum + u.followersCount, 0);
-
-    return {
-      totalUsers,
-      totalPosts,
-      verifiedUsers,
-      totalFollowers,
-    };
-  }, [feed.length]);
 
   return (
     <div className="min-h-full">
